@@ -33,27 +33,15 @@ function App() {
 
     // ── Input ──────────────────────────────────────────────────────────────
 
-    let dragging = false
+    let panning  = false
+    let painting = false
     let lastX = 0, lastY = 0
 
-    function onMouseDown(e: MouseEvent) {
-      if (e.button === 1 || e.button === 2) {
-        dragging = true; lastX = e.clientX; lastY = e.clientY
-      }
-    }
-    function onMouseMove(e: MouseEvent) {
-      if (!dragging) return
-      eng.camera.pan(e.clientX - lastX, e.clientY - lastY)
-      lastX = e.clientX; lastY = e.clientY
-    }
-    function onMouseUp() { dragging = false }
-
-    function onClick(e: MouseEvent) {
-      if (e.button !== 0) return
+    function placeTile(clientX: number, clientY: number) {
       const tool = toolRef.current
       if (!tool) return
-
-      const { col, row } = eng.camera.screenToWorld(e.clientX, e.clientY)
+      const rect = canvas.getBoundingClientRect()
+      const { col, row } = eng.camera.screenToWorld(clientX - rect.left, clientY - rect.top)
       if (!eng.world.inBounds(col, row)) return
 
       switch (tool.kind) {
@@ -61,11 +49,9 @@ function App() {
           eng.world.set(col, row, { zone: tool.zone, density: 0, building: Building.None })
           eng.renderer.minimap.markDirty()
           break
-        case 'building': {
-          // Clear zone when placing a building
+        case 'building':
           eng.world.set(col, row, { building: tool.building, zone: Zone.None, density: 0 })
           break
-        }
         case 'road': {
           const t = eng.world.get(col, row)
           eng.world.set(col, row, { overlay: t.overlay | Overlay.Road })
@@ -77,13 +63,31 @@ function App() {
           break
         }
         case 'bulldoze':
-          eng.world.set(col, row, {
-            zone: Zone.None, overlay: 0, density: 0,
-            building: Building.None,
-          })
+          eng.world.set(col, row, { zone: Zone.None, overlay: 0, density: 0, building: Building.None })
           eng.renderer.minimap.markDirty()
           break
       }
+    }
+
+    function onMouseDown(e: MouseEvent) {
+      if (e.button === 0 && toolRef.current) {
+        painting = true
+        placeTile(e.clientX, e.clientY)
+      }
+      if (e.button === 1 || e.button === 2) {
+        panning = true; lastX = e.clientX; lastY = e.clientY
+      }
+    }
+    function onMouseMove(e: MouseEvent) {
+      if (panning) {
+        eng.camera.pan(e.clientX - lastX, e.clientY - lastY)
+        lastX = e.clientX; lastY = e.clientY
+      }
+      if (painting) placeTile(e.clientX, e.clientY)
+    }
+    function onMouseUp(e: MouseEvent) {
+      if (e.button === 0) painting = false
+      if (e.button === 1 || e.button === 2) panning = false
     }
 
     function onWheel(e: WheelEvent) {
@@ -99,7 +103,6 @@ function App() {
     canvas.addEventListener('mousedown',   onMouseDown)
     canvas.addEventListener('mousemove',   onMouseMove)
     canvas.addEventListener('mouseup',     onMouseUp)
-    canvas.addEventListener('click',       onClick)
     canvas.addEventListener('wheel',       onWheel, { passive: false })
     canvas.addEventListener('contextmenu', e => e.preventDefault())
     window.addEventListener('resize',      onResize)
@@ -115,7 +118,6 @@ function App() {
       canvas.removeEventListener('mousedown',   onMouseDown)
       canvas.removeEventListener('mousemove',   onMouseMove)
       canvas.removeEventListener('mouseup',     onMouseUp)
-      canvas.removeEventListener('click',       onClick)
       canvas.removeEventListener('wheel',       onWheel)
       window.removeEventListener('resize',      onResize)
       offYear()
