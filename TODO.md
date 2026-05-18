@@ -89,6 +89,6 @@
 - [ ] `src/ui/SpeedControl.tsx`
 
 ## Hosting decisions pending
-- Custom domain: `webcity.cuplex.se` — configure in Cloudflare Pages dashboard.
-- Cloud saves / multiplayer: Cloudflare Workers + D1 (SQLite at edge) is the natural
-  upgrade path from local IndexedDB, same CF account, no new infrastructure.
+- Custom domain: `webcity.cuplex.se`
+- Cloud saves / multiplayer: SQLite or as a binary download.
+- Linux VPS deploy

@@ -37,11 +37,36 @@ function App() {
     let painting = false
     let lastX = 0, lastY = 0
 
+    function findHitTile(px: number, py: number): { col: number; row: number } | null {
+      const { hw, hh } = eng.camera
+      const naive = eng.camera.screenToWorld(px, py)
+      const naiveD = naive.col + naive.row
+      // Search front-to-back (highest d = closest to viewer) over a range that
+      // covers the maximum elevation offset (~ELEV_PAD diagonals above naive estimate)
+      for (let d = naiveD + 5; d >= naiveD - 1; d--) {
+        const colMin = Math.max(0, d - eng.world.rows + 1)
+        const colMax = Math.min(d, eng.world.cols - 1)
+        for (let col = colMax; col >= colMin; col--) {
+          const row = d - col
+          if (row < 0 || row >= eng.world.rows) continue
+          const tile = eng.world.get(col, row)
+          const s = eng.camera.worldToScreen(col, row, tile.elevation)
+          // Diamond hit test centered on tile center (s.x, s.y + hh)
+          if (Math.abs(px - s.x) / hw + Math.abs(py - (s.y + hh)) / hh <= 1) {
+            return { col, row }
+          }
+        }
+      }
+      return null
+    }
+
     function placeTile(clientX: number, clientY: number) {
       const tool = toolRef.current
       if (!tool) return
       const rect = canvas.getBoundingClientRect()
-      const { col, row } = eng.camera.screenToWorld(clientX - rect.left, clientY - rect.top)
+      const hit = findHitTile(clientX - rect.left, clientY - rect.top)
+      if (!hit) return
+      const { col, row } = hit
       if (!eng.world.inBounds(col, row)) return
 
       switch (tool.kind) {
