@@ -63,28 +63,28 @@
 - [x] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power/plant, W = water tower, L = power line, B = bulldoze, Escape = deselect, +/- = zoom.
 - [x] **Speed control UI**: Pause / 1× / 2× / 3× (SpeedControl.tsx).
 - [ ] **Save/load**: IndexedDB via idb-keyval; RLE-compress grid; multiple slots + autosave.
-- [x] **Tests**: Vitest — 58 tests across isoCamera, floodfill, A*, economy, power, water, zones.
+- [x] **Tests**: Vitest — 87 tests across core, rendering, simulation, and utility modules.
 
 ## Utilities still to implement
 - [x] `src/utils/astar.ts` — A* for road connectivity + `isRoadConnected` BFS
 - [x] `src/utils/floodfill.ts` — BFS for power/water networks
-- [ ] `src/core/saveLoad.ts` — IndexedDB serialization
+- [x] `src/core/saveLoad.ts` — IndexedDB serialization
 - [x] `src/simulation/zones.ts` — RCI demand + density
 - [x] `src/simulation/economy.ts` — Tax engine (bonds still pending)
 - [x] `src/simulation/power.ts` — Power network propagation
 - [x] `src/simulation/water.ts` — Water network propagation
-- [ ] `src/simulation/traffic.ts` — Road load (density convolution)
-- [ ] `src/simulation/landValue.ts` — Distance-decay desirability
-- [ ] `src/simulation/pollution.ts` — Industry/traffic diffusion grid
+- [x] `src/simulation/traffic.ts` — Road load (density convolution)
+- [x] `src/simulation/landValue.ts` — Distance-decay desirability
+- [x] `src/simulation/pollution.ts` — Industry/traffic diffusion grid
 - [x] `src/simulation/crime.ts` — Police coverage model
-- [ ] `src/simulation/fire.ts` — Fire coverage + spread
-- [ ] `src/simulation/disasters.ts` — Disaster event triggers
+- [x] `src/simulation/fire.ts` — Fire coverage + spread
+- [x] `src/simulation/disasters.ts` — Disaster event triggers
 - [x] `src/data/buildings.ts` — Building costs, upkeep, capacity
-- [ ] `src/ui/BudgetPanel.tsx`
-- [ ] `src/ui/DataLayerPanel.tsx`
-- [ ] `src/ui/AdvisorPanel.tsx`
-- [ ] `src/ui/GraphPanel.tsx`
-- [ ] `src/ui/ZoneInfoPopup.tsx`
+- [x] `src/ui/BudgetPanel.tsx`
+- [x] `src/ui/DataLayerPanel.tsx`
+- [x] `src/ui/AdvisorPanel.tsx`
+- [x] `src/ui/GraphPanel.tsx`
+- [x] `src/ui/ZoneInfoPopup.tsx`
 - [x] `src/ui/SpeedControl.tsx`
 
 ## Hosting decisions pending

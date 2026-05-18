@@ -1,6 +1,6 @@
-import { Zone, Building, type ActiveTool } from '../core/tile'
+import { Zone, Building, type ActiveTool, type BulldozeMode } from '../core/tile'
 
-export type ToolKey = 'R' | 'C' | 'I' | 'PP' | 'WT' | 'PS' | 'road' | 'power' | 'bulldoze'
+export type ToolKey = 'R' | 'C' | 'I' | 'PP' | 'WT' | 'PS' | 'road' | 'power' | 'dozeNormal' | 'dozeTerrain' | 'dozeZoning'
 
 export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'R')       return { kind: 'zone',     zone: Zone.Residential }
@@ -11,7 +11,7 @@ export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'PS')      return { kind: 'building', building: Building.PoliceStation }
   if (key === 'road')    return { kind: 'road' }
   if (key === 'power')   return { kind: 'power' }
-  return { kind: 'bulldoze' }
+  return { kind: 'bulldoze', mode: bulldozeModeForKey(key) }
 }
 
 interface Props {
@@ -34,8 +34,22 @@ const INFRA_BTNS: { key: ToolKey; label: string; bg: string; title: string }[] =
 ]
 
 const UTIL_BTNS: { key: ToolKey; label: string; title: string }[] = [
-  { key: 'bulldoze', label: '✕', title: 'Bulldoze [B]' },
+  { key: 'dozeNormal',  label: 'B1', title: 'Bulldoze normal: remove buildings, roads, and development [B]' },
+  { key: 'dozeTerrain', label: 'B2', title: 'Bulldoze terrain: clear and level tile [B then 2]' },
+  { key: 'dozeZoning',  label: 'B3', title: 'Bulldoze zoning: remove zone only [B then 3]' },
 ]
+
+export function bulldozeModeForKey(key: ToolKey): BulldozeMode {
+  if (key === 'dozeTerrain') return 'terrain'
+  if (key === 'dozeZoning')  return 'zoning'
+  return 'normal'
+}
+
+export function bulldozeKeyForMode(mode: BulldozeMode): ToolKey {
+  if (mode === 'terrain') return 'dozeTerrain'
+  if (mode === 'zoning')  return 'dozeZoning'
+  return 'dozeNormal'
+}
 
 export function Toolbar({ activeKey, onKeyChange }: Props) {
   function handleClick(key: ToolKey) {

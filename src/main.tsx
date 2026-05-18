@@ -4,7 +4,8 @@ import { Engine } from './core/engine'
 import { generateWorld } from './data/worldGen'
 import { Zone, Overlay, Building, Terrain, type ActiveTool } from './core/tile'
 import { events, type YearEvent } from './core/events'
-import { Toolbar, keyToTool, type ToolKey } from './ui/Toolbar'
+import { applyBulldoze } from './core/bulldoze'
+import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolbar'
 import { BottomBar } from './ui/BottomBar'
 import { CityLog } from './ui/CityLog'
 import { SpeedControl } from './ui/SpeedControl'
@@ -161,11 +162,7 @@ function App() {
           break
         }
         case 'bulldoze':
-          if (t.building === Building.None && t.zone === Zone.None &&
-              t.overlay === 0 && t.density === 0) return  // nothing to bulldoze
-          eng.world.set(col, row, {
-            zone: Zone.None, overlay: 0, density: 0, building: Building.None,
-          })
+          if (!applyBulldoze(eng.world, col, row, tool.mode)) return
           eng.renderer.minimap.markDirty()
           break
       }
@@ -238,15 +235,15 @@ function App() {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.target as HTMLElement).tagName === 'INPUT') return
       switch (e.key) {
-        case '1':                      setActiveKey(k => k === 'R'        ? null : 'R');        break
-        case '2':                      setActiveKey(k => k === 'C'        ? null : 'C');        break
-        case '3':                      setActiveKey(k => k === 'I'        ? null : 'I');        break
+        case '1':                      setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('normal')  : k === 'R' ? null : 'R'); break
+        case '2':                      setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('terrain') : k === 'C' ? null : 'C'); break
+        case '3':                      setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('zoning')  : k === 'I' ? null : 'I'); break
         case 'r': case 'R':            setActiveKey(k => k === 'road'     ? null : 'road');     break
         case 'p': case 'P':            setActiveKey(k => k === 'PP'       ? null : 'PP');       break
         case 'o': case 'O':            setActiveKey(k => k === 'PS'       ? null : 'PS');       break
         case 'w': case 'W':            setActiveKey(k => k === 'WT'       ? null : 'WT');       break
         case 'l': case 'L':            setActiveKey(k => k === 'power'    ? null : 'power');    break
-        case 'b': case 'B':            setActiveKey(k => k === 'bulldoze' ? null : 'bulldoze'); break
+        case 'b': case 'B':            setActiveKey(k => k === 'dozeNormal' ? null : 'dozeNormal'); break
         case 'Escape':                 setActiveKey(null);                                       break
         case '+': case '=': eng.camera.snapZoom(-1, canvas.width / 2, canvas.height / 2);      break
         case '-': case '_': eng.camera.snapZoom( 1, canvas.width / 2, canvas.height / 2);      break

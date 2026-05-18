@@ -13,3 +13,5 @@ Original prompt: Continue with the implementation plan according to the TODO.md 
 
 - Fire stations and `src/simulation/fire.ts` are the next Phase 2 slice.
 - Add a real data-layer/overlay panel before making crime/fire coverage visually inspectable across the whole map.
+- Added the remaining Utilities modules: save/load serialization, traffic, land value, pollution, fire, disasters, and placeholder UI panels.
+- Added bulldozer modes: normal demolition, clear/level terrain, and zoning-only removal. Covered behavior in `src/core/bulldoze.test.ts`.

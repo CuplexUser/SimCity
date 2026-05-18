@@ -4,6 +4,7 @@ import { stepPower } from './power'
 import { stepWater } from './water'
 import { stepZones } from './zones'
 import { stepCrime } from './crime'
+import { stepFire } from './fire'
 import { computeBudget } from './economy'
 
 const TICKS_PER_YEAR = 12  // 1 tick = 1 game month
@@ -25,6 +26,7 @@ export class SimManager {
     stepPower(this.world)
     stepWater(this.world)
     stepCrime(this.world)
+    stepFire(this.world)
     const { population } = stepZones(this.world, isYearTick)
     this.population = population
 

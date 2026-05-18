@@ -41,6 +41,7 @@ export interface Tile {
   watered:       boolean
   policed:       boolean  // within range of a Police Station
   fireProtected: boolean  // within range of a Fire Station
+  burning:       boolean  // active fire/disaster state
 }
 
 export function defaultTile(): Tile {
@@ -55,6 +56,7 @@ export function defaultTile(): Tile {
     watered:       false,
     policed:       false,
     fireProtected: false,
+    burning:       false,
   }
 }
 
@@ -63,5 +65,7 @@ export type ActiveTool =
   | { kind: 'building'; building: Building }
   | { kind: 'road' }
   | { kind: 'power' }
-  | { kind: 'bulldoze' }
+  | { kind: 'bulldoze'; mode: BulldozeMode }
   | null
+
+export type BulldozeMode = 'normal' | 'terrain' | 'zoning'
