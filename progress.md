@@ -15,3 +15,5 @@ Original prompt: Continue with the implementation plan according to the TODO.md 
 - Add a real data-layer/overlay panel before making crime/fire coverage visually inspectable across the whole map.
 - Added the remaining Utilities modules: save/load serialization, traffic, land value, pollution, fire, disasters, and placeholder UI panels.
 - Added bulldozer modes: normal demolition, clear/level terrain, and zoning-only removal. Covered behavior in `src/core/bulldoze.test.ts`.
+- Added toolbar options menu with New City, Save City, and Load City. Save/load now stores full game state metadata as well as world tiles.
+- Named city saves are now listed in the options menu; New City uses a fresh randomized terrain seed.

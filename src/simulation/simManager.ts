@@ -53,4 +53,11 @@ export class SimManager {
 
   getYear(): number { return this.year }
   getTick(): number { return this.tick }
+
+  reset(state?: { year?: number; tick?: number; population?: number; funds?: number }): void {
+    this.year = state?.year ?? 2000
+    this.tick = state?.tick ?? 0
+    this.population = state?.population ?? 0
+    this.funds = state?.funds ?? 20_000
+  }
 }

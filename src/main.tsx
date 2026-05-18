@@ -1,10 +1,12 @@
 import { render } from 'preact'
 import { useState, useEffect, useRef } from 'preact/hooks'
 import { Engine } from './core/engine'
+import { World } from './core/world'
 import { generateWorld } from './data/worldGen'
 import { Zone, Overlay, Building, Terrain, type ActiveTool } from './core/tile'
 import { events, type YearEvent } from './core/events'
 import { applyBulldoze } from './core/bulldoze'
+import { listSavedCities, loadGameState, normalizeCityName, saveGameState } from './core/saveLoad'
 import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolbar'
 import { BottomBar } from './ui/BottomBar'
 import { CityLog } from './ui/CityLog'
@@ -32,6 +34,9 @@ function App() {
   const [pop,    setPop]    = useState(0)
   const [funds,  setFunds]  = useState(20_000)
   const [speed,  setSpeed]  = useState(1)
+  const [optionsStatus, setOptionsStatus] = useState('')
+  const [cityName, setCityName] = useState('New City')
+  const [savedCities, setSavedCities] = useState<string[]>([])
 
   // Sync toolRef whenever the toolbar selection changes (keyboard OR click)
   useEffect(() => {
@@ -42,6 +47,79 @@ function App() {
     speedRef.current = hz
     setSpeed(hz)
     engineRef.current?.setSimSpeed(hz)
+  }
+
+  function resetUiState(yearValue = 2000, populationValue = 0, fundsValue = 20_000) {
+    fundsRef.current = fundsValue
+    setYear(yearValue)
+    setPop(populationValue)
+    setFunds(fundsValue)
+    setActiveKey(null)
+  }
+
+  function handleNewGame() {
+    const eng = engineRef.current
+    if (!eng) return
+    const fresh = new World()
+    generateWorld(fresh, Math.floor(Date.now() + Math.random() * 1_000_000))
+    eng.world.replaceFrom(fresh)
+    eng.sim.reset()
+    resetUiState()
+    setCityName('New City')
+    eng.renderer.minimap.markDirty()
+    eng.renderer.draw()
+    setOptionsStatus('New city ready')
+  }
+
+  async function handleSaveState() {
+    const eng = engineRef.current
+    if (!eng) return
+    const name = normalizeCityName(cityName)
+    try {
+      await saveGameState(eng.world, {
+        year: eng.sim.getYear(),
+        tick: eng.sim.getTick(),
+        population: eng.sim.population,
+        funds: fundsRef.current,
+      }, name)
+      setCityName(name)
+      await refreshSavedCities()
+      setOptionsStatus(`${name} saved`)
+    } catch {
+      setOptionsStatus('Save failed')
+    }
+  }
+
+  async function handleLoadState() {
+    const eng = engineRef.current
+    if (!eng) return
+    const name = normalizeCityName(cityName || savedCities[0] || '')
+    try {
+      const saved = await loadGameState(name)
+      if (!saved) {
+        setOptionsStatus('No saved city')
+        return
+      }
+      eng.world.replaceFrom(saved.world)
+      eng.sim.reset(saved.sim)
+      resetUiState(saved.sim.year, saved.sim.population, saved.sim.funds)
+      setCityName(name)
+      eng.renderer.minimap.markDirty()
+      eng.renderer.draw()
+      setOptionsStatus(`${name} loaded`)
+    } catch {
+      setOptionsStatus('Load failed')
+    }
+  }
+
+  async function refreshSavedCities() {
+    try {
+      const names = await listSavedCities()
+      setSavedCities(names)
+      if (!cityName.trim() && names[0]) setCityName(names[0])
+    } catch {
+      setOptionsStatus('Save list failed')
+    }
   }
 
   useEffect(() => {
@@ -280,7 +358,18 @@ function App() {
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <canvas ref={canvasRef} style={{ display: 'block' }} />
-      <Toolbar activeKey={activeKey} onKeyChange={setActiveKey} />
+      <Toolbar
+        activeKey={activeKey}
+        onKeyChange={setActiveKey}
+        onNewGame={handleNewGame}
+        onSaveState={handleSaveState}
+        onLoadState={handleLoadState}
+        onOptionsOpen={refreshSavedCities}
+        cityName={cityName}
+        onCityNameChange={setCityName}
+        savedCities={savedCities}
+        status={optionsStatus}
+      />
       <BottomBar year={year} population={pop} funds={funds} />
       <SpeedControl speed={speed} onSpeedChange={handleSpeedChange} />
       <CityLog />

@@ -25,6 +25,15 @@ export class World {
     Object.assign(this.tiles[row * this.cols + col], patch)
   }
 
+  replaceFrom(source: World): void {
+    if (source.cols !== this.cols || source.rows !== this.rows) {
+      throw new Error('World dimensions do not match')
+    }
+    source.forEach((tile, col, row) => {
+      this.set(col, row, { ...tile })
+    })
+  }
+
   forEach(fn: (tile: Tile, col: number, row: number) => void): void {
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {

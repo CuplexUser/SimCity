@@ -1,3 +1,4 @@
+import { useState } from 'preact/hooks'
 import { Zone, Building, type ActiveTool, type BulldozeMode } from '../core/tile'
 
 export type ToolKey = 'R' | 'C' | 'I' | 'PP' | 'WT' | 'PS' | 'road' | 'power' | 'dozeNormal' | 'dozeTerrain' | 'dozeZoning'
@@ -17,6 +18,14 @@ export function keyToTool(key: ToolKey): ActiveTool {
 interface Props {
   activeKey:    ToolKey | null
   onKeyChange:  (key: ToolKey | null) => void
+  onNewGame:    () => void | Promise<void>
+  onSaveState:  () => void | Promise<void>
+  onLoadState:  () => void | Promise<void>
+  onOptionsOpen: () => void | Promise<void>
+  cityName:     string
+  onCityNameChange: (name: string) => void
+  savedCities:  string[]
+  status:       string
 }
 
 const ZONE_BTNS: { key: ToolKey; label: string; bg: string; title: string }[] = [
@@ -51,9 +60,33 @@ export function bulldozeKeyForMode(mode: BulldozeMode): ToolKey {
   return 'dozeNormal'
 }
 
-export function Toolbar({ activeKey, onKeyChange }: Props) {
+export function Toolbar({
+  activeKey,
+  onKeyChange,
+  onNewGame,
+  onSaveState,
+  onLoadState,
+  onOptionsOpen,
+  cityName,
+  onCityNameChange,
+  savedCities,
+  status,
+}: Props) {
+  const [optionsOpen, setOptionsOpen] = useState(false)
+
   function handleClick(key: ToolKey) {
     onKeyChange(activeKey === key ? null : key)
+  }
+
+  async function runAction(action: () => void | Promise<void>) {
+    await action()
+  }
+
+  function toggleOptions() {
+    setOptionsOpen((open) => {
+      if (!open) void onOptionsOpen()
+      return !open
+    })
   }
 
   const btn = (key: ToolKey, label: string, bg: string, fg: string, title: string) => (
@@ -102,6 +135,89 @@ export function Toolbar({ activeKey, onKeyChange }: Props) {
       {divider}
       {UTIL_BTNS.map(({ key, label, title }) =>
         btn(key, label, '#2a2a2a', '#eee', title)
+      )}
+      {divider}
+      <button
+        type="button"
+        title="Options"
+        onClick={toggleOptions}
+        style={{
+          width: 38, height: 38,
+          border:      `2px solid ${optionsOpen ? '#fff' : 'transparent'}`,
+          background:  '#242424',
+          color:       '#eee',
+          cursor:      'pointer',
+          borderRadius: 4,
+          fontSize:    18,
+          fontWeight:  'bold',
+        }}
+      >...</button>
+      {optionsOpen && (
+        <div style={{
+          position:   'absolute',
+          left:       56,
+          bottom:     8,
+          width:      150,
+          background: 'rgba(0,0,0,0.88)',
+          border:     '1px solid #555',
+          borderRadius: 6,
+          padding:    6,
+          display:    'flex',
+          flexDirection: 'column',
+          gap:        4,
+        }}>
+          <input
+            value={cityName}
+            placeholder="City name"
+            onInput={(e) => onCityNameChange((e.currentTarget as HTMLInputElement).value)}
+            style={{
+              height: 28,
+              border: '1px solid #555',
+              background: '#111',
+              color: '#eee',
+              borderRadius: 4,
+              padding: '0 8px',
+            }}
+          />
+          {savedCities.length > 0 && (
+            <select
+              value={savedCities.includes(cityName) ? cityName : ''}
+              onChange={(e) => onCityNameChange((e.currentTarget as HTMLSelectElement).value)}
+              style={{
+                height: 28,
+                border: '1px solid #555',
+                background: '#111',
+                color: '#eee',
+                borderRadius: 4,
+              }}
+            >
+              <option value="">Load...</option>
+              {savedCities.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          )}
+          {[
+            { label: 'New City', action: onNewGame },
+            { label: 'Save City', action: onSaveState },
+            { label: 'Load City', action: onLoadState },
+          ].map(({ label, action }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => { void runAction(action) }}
+              style={{
+                height: 28,
+                border: '1px solid #555',
+                background: '#1f1f1f',
+                color: '#eee',
+                cursor: 'pointer',
+                borderRadius: 4,
+                textAlign: 'left',
+                padding: '0 8px',
+              }}
+            >{label}</button>
+          ))}
+          {status && <div style={{ color: '#aaa', fontSize: 11, padding: '2px 4px' }}>{status}</div>}
+        </div>
       )}
     </div>
   )

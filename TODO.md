@@ -63,7 +63,7 @@
 - [x] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power/plant, W = water tower, L = power line, B = bulldoze, Escape = deselect, +/- = zoom.
 - [x] **Speed control UI**: Pause / 1× / 2× / 3× (SpeedControl.tsx).
 - [ ] **Save/load**: IndexedDB via idb-keyval; RLE-compress grid; multiple slots + autosave.
-- [x] **Tests**: Vitest — 87 tests across core, rendering, simulation, and utility modules.
+- [x] **Tests**: Vitest — 89 tests across core, rendering, simulation, and utility modules.
 
 ## Utilities still to implement
 - [x] `src/utils/astar.ts` — A* for road connectivity + `isRoadConnected` BFS

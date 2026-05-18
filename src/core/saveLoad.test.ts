@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deserializeWorld, serializeWorld } from './saveLoad'
+import { deserializeGameState, deserializeWorld, normalizeCityName, serializeGameState, serializeWorld } from './saveLoad'
 import { World } from './world'
 import { Building, Overlay, Terrain, Zone } from './tile'
 
@@ -35,5 +35,19 @@ describe('saveLoad', () => {
     const world = new World()
     const save = serializeWorld(world)
     expect(() => deserializeWorld({ ...save, cols: 1 })).toThrow('Unsupported save format')
+  })
+
+  it('round-trips full game state metadata', () => {
+    const world = new World()
+    world.set(1, 1, { building: Building.WaterTower })
+    const save = serializeGameState(world, { year: 2010, tick: 42, population: 1200, funds: 99_999 })
+    const restored = deserializeGameState(save)
+    expect(restored.world.get(1, 1).building).toBe(Building.WaterTower)
+    expect(restored.sim).toEqual({ year: 2010, tick: 42, population: 1200, funds: 99_999 })
+  })
+
+  it('normalizes city names for save slots', () => {
+    expect(normalizeCityName('  New   Stockholm  ')).toBe('New Stockholm')
+    expect(normalizeCityName('   ')).toBe('Untitled City')
   })
 })
