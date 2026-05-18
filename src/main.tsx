@@ -11,12 +11,20 @@ import { SpeedControl } from './ui/SpeedControl'
 import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST } from './data/buildings'
 import { Minimap } from './rendering/minimap'
 
+declare global {
+  interface Window {
+    render_game_to_text?: () => string
+    advanceTime?: (ms: number) => void
+  }
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<Engine | null>(null)
   const toolRef   = useRef<ActiveTool>(null)
   // Keeps current funds in the effect closure without stale-closure issues
   const fundsRef  = useRef(20_000)
+  const speedRef  = useRef(1)
 
   const [activeKey, setActiveKey] = useState<ToolKey | null>(null)
   const [year,   setYear]   = useState(2000)
@@ -30,6 +38,7 @@ function App() {
   }, [activeKey])
 
   function handleSpeedChange(hz: number) {
+    speedRef.current = hz
     setSpeed(hz)
     engineRef.current?.setSimSpeed(hz)
   }
@@ -43,6 +52,35 @@ function App() {
     engineRef.current = eng
     generateWorld(eng.world)
     eng.start()
+
+    window.render_game_to_text = () => {
+      const buildings: Record<string, number> = {}
+      let policed = 0
+      eng.world.forEach((tile) => {
+        if (tile.policed) policed++
+        if (tile.building !== Building.None) {
+          const label = BUILDING_DEFS[tile.building].label
+          buildings[label] = (buildings[label] ?? 0) + 1
+        }
+      })
+      return JSON.stringify({
+        coordinates: 'tile origin at northwest corner; col increases east, row increases south',
+        year: eng.sim.getYear(),
+        tick: eng.sim.getTick(),
+        population: eng.sim.population,
+        funds: fundsRef.current,
+        activeTool: toolRef.current,
+        camera: { zoom: eng.camera.zoom, panX: eng.camera.panX, panY: eng.camera.panY },
+        services: { policedTiles: policed },
+        buildings,
+      })
+    }
+
+    window.advanceTime = (ms: number) => {
+      const steps = Math.max(0, Math.floor((ms / 1000) * speedRef.current))
+      for (let i = 0; i < steps; i++) eng.sim.step()
+      eng.renderer.draw()
+    }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -205,6 +243,7 @@ function App() {
         case '3':                      setActiveKey(k => k === 'I'        ? null : 'I');        break
         case 'r': case 'R':            setActiveKey(k => k === 'road'     ? null : 'road');     break
         case 'p': case 'P':            setActiveKey(k => k === 'PP'       ? null : 'PP');       break
+        case 'o': case 'O':            setActiveKey(k => k === 'PS'       ? null : 'PS');       break
         case 'w': case 'W':            setActiveKey(k => k === 'WT'       ? null : 'WT');       break
         case 'l': case 'L':            setActiveKey(k => k === 'power'    ? null : 'power');    break
         case 'b': case 'B':            setActiveKey(k => k === 'bulldoze' ? null : 'bulldoze'); break
@@ -235,6 +274,8 @@ function App() {
       canvas.removeEventListener('wheel',       onWheel)
       window.removeEventListener('resize',      onResize)
       window.removeEventListener('keydown',     onKeyDown)
+      delete window.render_game_to_text
+      delete window.advanceTime
       offYear()
     }
   }, [])

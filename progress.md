@@ -1,0 +1,15 @@
+Original prompt: Continue with the implementation plan according to the TODO.md file
+
+## 2026-05-18
+
+- Started Phase 2 Services with Police Stations, since `Tile` and `Building` already include police-specific fields.
+- Planned slice: police coverage simulation, placement UI/hotkey, budget upkeep, renderer support, tests, and TODO update.
+- Added police coverage implementation and fixed the water-barrier test to account for BFS routing around single obstacles.
+- Verified with `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+- Ran Playwright smoke test through a project-local copy of the web-game client because the skill script resolves packages relative to its own directory. The first burst showed no placement because the client only mapped `a`/`b`; patched the ignored local copy to map `o` to `KeyO`.
+- Smoke result: screenshot shows a Police Station placed near screen center; text state reported funds `$19,000`, `buildings: { "Police Station": 1 }`, and `policedTiles: 1301`.
+
+## Next TODOs
+
+- Fire stations and `src/simulation/fire.ts` are the next Phase 2 slice.
+- Add a real data-layer/overlay panel before making crime/fire coverage visually inspectable across the whole map.

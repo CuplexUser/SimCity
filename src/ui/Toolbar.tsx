@@ -1,6 +1,6 @@
 import { Zone, Building, type ActiveTool } from '../core/tile'
 
-export type ToolKey = 'R' | 'C' | 'I' | 'PP' | 'WT' | 'road' | 'power' | 'bulldoze'
+export type ToolKey = 'R' | 'C' | 'I' | 'PP' | 'WT' | 'PS' | 'road' | 'power' | 'bulldoze'
 
 export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'R')       return { kind: 'zone',     zone: Zone.Residential }
@@ -8,6 +8,7 @@ export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'I')       return { kind: 'zone',     zone: Zone.Industrial }
   if (key === 'PP')      return { kind: 'building', building: Building.PowerPlant }
   if (key === 'WT')      return { kind: 'building', building: Building.WaterTower }
+  if (key === 'PS')      return { kind: 'building', building: Building.PoliceStation }
   if (key === 'road')    return { kind: 'road' }
   if (key === 'power')   return { kind: 'power' }
   return { kind: 'bulldoze' }
@@ -27,6 +28,7 @@ const ZONE_BTNS: { key: ToolKey; label: string; bg: string; title: string }[] = 
 const INFRA_BTNS: { key: ToolKey; label: string; bg: string; title: string }[] = [
   { key: 'PP',    label: '⚙',  bg: '#3a3a3a', title: 'Power Plant ($5,000) [P]' },
   { key: 'WT',    label: '~',  bg: '#2d5c7a', title: 'Water Tower ($500) [W]' },
+  { key: 'PS',    label: '★',  bg: '#1f4f8f', title: 'Police Station ($1,000) [O]' },
   { key: 'road',  label: '━',  bg: '#2a2a2a', title: 'Road ($10/tile) [R]' },
   { key: 'power', label: '⚡', bg: '#2a2a2a', title: 'Power line ($5/tile) [L]' },
 ]

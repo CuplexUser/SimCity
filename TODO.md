@@ -20,7 +20,7 @@
 - [x] Road connectivity check (A* in utils/astar.ts; zones require connected road segment ≥2 tiles)
 
 ## Phase 2 — Services
-- [ ] Police stations (coverage radius → crime reduction)
+- [x] Police stations (coverage radius → crime reduction)
 - [ ] Fire stations (coverage radius + fire spread probability)
 - [ ] Hospitals, schools, libraries, stadium
 - [ ] Crime overlay
@@ -76,7 +76,7 @@
 - [ ] `src/simulation/traffic.ts` — Road load (density convolution)
 - [ ] `src/simulation/landValue.ts` — Distance-decay desirability
 - [ ] `src/simulation/pollution.ts` — Industry/traffic diffusion grid
-- [ ] `src/simulation/crime.ts` — Police coverage model
+- [x] `src/simulation/crime.ts` — Police coverage model
 - [ ] `src/simulation/fire.ts` — Fire coverage + spread
 - [ ] `src/simulation/disasters.ts` — Disaster event triggers
 - [x] `src/data/buildings.ts` — Building costs, upkeep, capacity

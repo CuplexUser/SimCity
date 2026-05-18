@@ -24,3 +24,11 @@ client/src/version.ts
 
 settings.json
 settings.local.json
+
+# Playwright
+/output/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

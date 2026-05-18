@@ -243,5 +243,12 @@ function drawBuilding(
   } else if (building === Building.WaterTower) {
     drawDiamond(ctx, cx, cy + hh * 0.35, hw * 0.65, hh * 0.40, '#2d5c7a')
     drawDiamond(ctx, cx, cy + hh * 0.05, hw * 0.45, hh * 0.45, '#4a7a9b')
+  } else if (building === Building.PoliceStation) {
+    drawDiamond(ctx, cx, cy + hh * 0.30, hw * 0.70, hh * 0.48, '#1f4f8f')
+    drawDiamond(ctx, cx, cy + hh * 0.02, hw * 0.42, hh * 0.34, '#d8e8ff')
+    ctx.fillStyle = '#1f4f8f'
+    ctx.beginPath()
+    ctx.arc(cx, cy + hh * 0.48, Math.max(2, hw * 0.08), 0, Math.PI * 2)
+    ctx.fill()
   }
 }

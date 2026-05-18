@@ -20,32 +20,41 @@ export enum Overlay {
 }
 
 export enum Building {
-  None       = 0,
-  PowerPlant = 1,  // coal plant — power source, 50-tile BFS range
-  WaterTower = 2,  // water tower — water source, 20-tile BFS range
+  None          = 0,
+  PowerPlant    = 1,   // coal plant — power source, 50-tile BFS range
+  WaterTower    = 2,   // water tower — water source, 20-tile BFS range
+  PoliceStation = 3,   // police coverage, 25-tile radius
+  FireStation   = 4,   // fire coverage, 20-tile radius
+  Hospital      = 5,   // health coverage, 20-tile radius
+  School        = 6,   // education coverage, 15-tile radius
+  Library       = 7,   // education coverage, 10-tile radius (small bonus)
 }
 
 export interface Tile {
-  terrain:   Terrain
-  elevation: number   // 0–7
-  zone:      Zone
-  density:   number   // 0–8 (0 = vacant plot, 8 = max density)
-  overlay:   number   // bitmask of Overlay values
-  building:  Building
-  powered:   boolean
-  watered:   boolean
+  terrain:       Terrain
+  elevation:     number   // 0–7
+  zone:          Zone
+  density:       number   // 0–8 (0 = vacant plot, 8 = max density)
+  overlay:       number   // bitmask of Overlay values
+  building:      Building
+  powered:       boolean
+  watered:       boolean
+  policed:       boolean  // within range of a Police Station
+  fireProtected: boolean  // within range of a Fire Station
 }
 
 export function defaultTile(): Tile {
   return {
-    terrain:   Terrain.Grass,
-    elevation: 0,
-    zone:      Zone.None,
-    density:   0,
-    overlay:   0,
-    building:  Building.None,
-    powered:   false,
-    watered:   false,
+    terrain:       Terrain.Grass,
+    elevation:     0,
+    zone:          Zone.None,
+    density:       0,
+    overlay:       0,
+    building:      Building.None,
+    powered:       false,
+    watered:       false,
+    policed:       false,
+    fireProtected: false,
   }
 }
 

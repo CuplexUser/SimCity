@@ -3,6 +3,7 @@ import { events, type TickEvent, type YearEvent, type LogEvent } from '../core/e
 import { stepPower } from './power'
 import { stepWater } from './water'
 import { stepZones } from './zones'
+import { stepCrime } from './crime'
 import { computeBudget } from './economy'
 
 const TICKS_PER_YEAR = 12  // 1 tick = 1 game month
@@ -23,6 +24,7 @@ export class SimManager {
     // Run all simulation subsystems
     stepPower(this.world)
     stepWater(this.world)
+    stepCrime(this.world)
     const { population } = stepZones(this.world, isYearTick)
     this.population = population
 
