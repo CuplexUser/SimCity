@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { computeBudget } from './economy'
 import { World } from '../core/world'
-import { Zone, Overlay } from '../core/tile'
+import { Zone, Overlay, Building } from '../core/tile'
+import { BUILDING_DEFS } from '../data/buildings'
 
 describe('computeBudget', () => {
   it('returns zero revenue and zero expenses for a blank world', () => {
@@ -45,6 +46,20 @@ describe('computeBudget', () => {
     world.set(3, 4, { overlay: Overlay.Road })
     const { expenses } = computeBudget(world)
     expect(expenses).toBe(4)  // 2 roads * $2
+  })
+
+  it('power plant upkeep is added to expenses', () => {
+    const world = new World()
+    world.set(5, 5, { building: Building.PowerPlant })
+    const { expenses } = computeBudget(world)
+    expect(expenses).toBe(BUILDING_DEFS[Building.PowerPlant].upkeep)  // 300
+  })
+
+  it('water tower upkeep is added to expenses', () => {
+    const world = new World()
+    world.set(5, 5, { building: Building.WaterTower })
+    const { expenses } = computeBudget(world)
+    expect(expenses).toBe(BUILDING_DEFS[Building.WaterTower].upkeep)  // 50
   })
 
   it('multiple zones and roads accumulate correctly', () => {

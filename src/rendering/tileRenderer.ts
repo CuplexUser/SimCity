@@ -171,41 +171,60 @@ export function drawTiles(
     ctx.fill()
   }
 
-  // Roads — one fill call for all road tiles
+  // Roads — proportionally scaled diamond (same formula as zone fills)
   if (roadX.length > 0) {
-    const rh = hh * 0.35
+    const s = 0.92
     ctx.fillStyle = PALETTE.road
     ctx.beginPath()
     for (let i = 0; i < roadX.length; i++) {
       const cx = roadX[i], cy = roadY[i]
-      ctx.moveTo(cx,      cy + hh - rh)
-      ctx.lineTo(cx + hw, cy + hh)
-      ctx.lineTo(cx,      cy + hh + rh)
-      ctx.lineTo(cx - hw, cy + hh)
+      ctx.moveTo(cx,           cy + hh * (1 - s))
+      ctx.lineTo(cx + hw * s,  cy + hh)
+      ctx.lineTo(cx,           cy + hh * (1 + s))
+      ctx.lineTo(cx - hw * s,  cy + hh)
       ctx.closePath()
     }
     ctx.fill()
-    // Centerline dash
+    // Centre stripe — thin dark line along the row axis
     ctx.strokeStyle = PALETTE.roadDark
     ctx.lineWidth   = Math.max(0.5, hw * 0.05)
     ctx.beginPath()
     for (let i = 0; i < roadX.length; i++) {
-      ctx.moveTo(roadX[i] - hw, roadY[i] + hh)
-      ctx.lineTo(roadX[i] + hw, roadY[i] + hh)
+      ctx.moveTo(roadX[i] - hw * s, roadY[i] + hh)
+      ctx.lineTo(roadX[i] + hw * s, roadY[i] + hh)
     }
     ctx.stroke()
   }
 
-  // Power lines — one stroke call
+  // Power lines — X-shaped wires in both grid directions + pylon dot
   if (pwrX.length > 0) {
+    const sp = 0.78
     ctx.strokeStyle = PALETTE.powerLine
-    ctx.lineWidth   = Math.max(1, zoom)
+    ctx.lineWidth   = Math.max(0.8, zoom * 0.9)
     ctx.beginPath()
     for (let i = 0; i < pwrX.length; i++) {
-      ctx.moveTo(pwrX[i] - hw * 0.5, pwrY[i] + hh * 0.8)
-      ctx.lineTo(pwrX[i] + hw * 0.5, pwrY[i] + hh * 1.2)
+      const cx = pwrX[i], cy = pwrY[i]
+      // Wire along row axis
+      ctx.moveTo(cx - hw * sp, cy + hh)
+      ctx.lineTo(cx + hw * sp, cy + hh)
+      // Wire along col axis
+      ctx.moveTo(cx, cy + hh * (1 - sp))
+      ctx.lineTo(cx, cy + hh * (1 + sp))
     }
     ctx.stroke()
+    // Pylon — small filled diamond at tile centre
+    const ps = 0.10
+    ctx.fillStyle = PALETTE.powerLine
+    ctx.beginPath()
+    for (let i = 0; i < pwrX.length; i++) {
+      const cx = pwrX[i], cy = pwrY[i]
+      ctx.moveTo(cx,           cy + hh * (1 - ps))
+      ctx.lineTo(cx + hw * ps, cy + hh)
+      ctx.lineTo(cx,           cy + hh * (1 + ps))
+      ctx.lineTo(cx - hw * ps, cy + hh)
+      ctx.closePath()
+    }
+    ctx.fill()
   }
 }
 

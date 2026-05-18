@@ -1,6 +1,7 @@
 import { type World } from '../core/world'
 import { Zone, Overlay } from '../core/tile'
 import { events, type LogEvent } from '../core/events'
+import { isRoadConnected } from '../utils/astar'
 
 interface ZoneResult {
   population: number
@@ -57,12 +58,17 @@ export function stepZones(world: World, isYearTick: boolean): ZoneResult {
 }
 
 function hasRoadAccess(world: World, col: number, row: number): boolean {
-  if (world.get(col, row).overlay & Overlay.Road) return true
   const dirs = [{ dc: 0, dr: 1 }, { dc: 0, dr: -1 }, { dc: 1, dr: 0 }, { dc: -1, dr: 0 }]
+  const candidates: Array<{ col: number; row: number }> = []
+
+  if (world.get(col, row).overlay & Overlay.Road) candidates.push({ col, row })
   for (const { dc, dr } of dirs) {
-    const nc = col + dc
-    const nr = row + dr
-    if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.Road)) return true
+    const nc = col + dc, nr = row + dr
+    if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.Road)) {
+      candidates.push({ col: nc, row: nr })
+    }
   }
-  return false
+
+  // Require the adjacent road to be part of a connected segment (not an isolated stub)
+  return candidates.some(({ col: rc, row: rr }) => isRoadConnected(world, rc, rr, 1))
 }

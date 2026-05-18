@@ -17,7 +17,7 @@
 - [x] Water network (BFS flood-fill, 20-tile range from Water Tower)
 - [x] Annual budget engine (zone tax revenue, road upkeep expenses)
 - [x] City log (year-end budget summary + population milestones)
-- [ ] Road connectivity check (currently: adjacent-road check; A* needed for full connectivity)
+- [x] Road connectivity check (A* in utils/astar.ts; zones require connected road segment ≥2 tiles)
 
 ## Phase 2 — Services
 - [ ] Police stations (coverage radius → crime reduction)
@@ -60,33 +60,32 @@
       by (row + col + buildingHeight) once multi-tile buildings are added.
 - [x] **Minimap redraw**: Dirty-flag implemented — only rebakes when world changes.
 - [ ] **Viewport indicator**: Show camera viewport rect on minimap.
-- [ ] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power, B = bulldoze,
-      Escape = deselect, +/- = zoom.
-- [ ] **Speed control UI**: Pause / 1× / 2× / 3× (SpeedControl.tsx).
+- [x] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power/plant, W = water tower, L = power line, B = bulldoze, Escape = deselect, +/- = zoom.
+- [x] **Speed control UI**: Pause / 1× / 2× / 3× (SpeedControl.tsx).
 - [ ] **Save/load**: IndexedDB via idb-keyval; RLE-compress grid; multiple slots + autosave.
-- [ ] **Tests**: Add Vitest when zones.ts / economy.ts have non-trivial logic to test.
+- [x] **Tests**: Vitest — 58 tests across isoCamera, floodfill, A*, economy, power, water, zones.
 
 ## Utilities still to implement
-- [ ] `src/utils/astar.ts` — A* for road connectivity
-- [ ] `src/utils/floodfill.ts` — BFS for power/water networks
+- [x] `src/utils/astar.ts` — A* for road connectivity + `isRoadConnected` BFS
+- [x] `src/utils/floodfill.ts` — BFS for power/water networks
 - [ ] `src/core/saveLoad.ts` — IndexedDB serialization
-- [ ] `src/simulation/zones.ts` — RCI demand + density
-- [ ] `src/simulation/economy.ts` — Tax engine + bonds
-- [ ] `src/simulation/power.ts` — Power network propagation
-- [ ] `src/simulation/water.ts` — Water network propagation
+- [x] `src/simulation/zones.ts` — RCI demand + density
+- [x] `src/simulation/economy.ts` — Tax engine (bonds still pending)
+- [x] `src/simulation/power.ts` — Power network propagation
+- [x] `src/simulation/water.ts` — Water network propagation
 - [ ] `src/simulation/traffic.ts` — Road load (density convolution)
 - [ ] `src/simulation/landValue.ts` — Distance-decay desirability
 - [ ] `src/simulation/pollution.ts` — Industry/traffic diffusion grid
 - [ ] `src/simulation/crime.ts` — Police coverage model
 - [ ] `src/simulation/fire.ts` — Fire coverage + spread
 - [ ] `src/simulation/disasters.ts` — Disaster event triggers
-- [ ] `src/data/buildings.ts` — Building costs, upkeep, capacity
+- [x] `src/data/buildings.ts` — Building costs, upkeep, capacity
 - [ ] `src/ui/BudgetPanel.tsx`
 - [ ] `src/ui/DataLayerPanel.tsx`
 - [ ] `src/ui/AdvisorPanel.tsx`
 - [ ] `src/ui/GraphPanel.tsx`
 - [ ] `src/ui/ZoneInfoPopup.tsx`
-- [ ] `src/ui/SpeedControl.tsx`
+- [x] `src/ui/SpeedControl.tsx`
 
 ## Hosting decisions pending
 - Custom domain: `webcity.cuplex.se`

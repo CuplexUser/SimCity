@@ -24,10 +24,12 @@ describe('stepZones', () => {
     expect(population).toBe(40)
   })
 
-  it('residential density grows on year tick when powered + road access', () => {
+  it('residential density grows on year tick when powered + connected road access', () => {
     const world = new World()
     world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    // Two-tile road segment satisfies isRoadConnected(..., 1)
     world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
     stepZones(world, true)
     expect(world.get(5, 5).density).toBe(2)
   })
@@ -43,7 +45,16 @@ describe('stepZones', () => {
   it('density does not grow without road access', () => {
     const world = new World()
     world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
-    // No road nearby
+    // No road nearby — stays at density 1
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(1)
+  })
+
+  it('density does not grow with an isolated single-tile road (stub)', () => {
+    const world = new World()
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    // Single isolated road tile fails isRoadConnected check
+    world.set(5, 6, { overlay: Overlay.Road })
     stepZones(world, true)
     expect(world.get(5, 5).density).toBe(1)
   })
@@ -56,9 +67,10 @@ describe('stepZones', () => {
     expect(world.get(5, 5).density).toBe(8)
   })
 
-  it('a road overlay on the tile itself counts as road access', () => {
+  it('a road overlay on the tile itself counts when connected to another road', () => {
     const world = new World()
     world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, overlay: Overlay.Road })
+    world.set(5, 6, { overlay: Overlay.Road })  // makes the on-tile road connected
     stepZones(world, true)
     expect(world.get(5, 5).density).toBe(2)
   })
@@ -69,6 +81,7 @@ describe('stepZones', () => {
     world.set(0, 0, { zone: Zone.Residential, density: 1, powered: true })
     world.set(0, 1, { zone: Zone.Commercial,  density: 0, powered: true })
     world.set(0, 2, { overlay: Overlay.Road })
+    world.set(0, 3, { overlay: Overlay.Road })  // connected road segment
     stepZones(world, true)
     // population = 10, cCount = 1, cDemand = 10 > 1*30? No → density stays 0
     expect(world.get(0, 1).density).toBe(0)

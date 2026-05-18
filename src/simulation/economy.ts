@@ -1,7 +1,7 @@
 import { type World } from '../core/world'
-import { Zone, Overlay } from '../core/tile'
+import { Zone, Overlay, Building } from '../core/tile'
+import { BUILDING_DEFS } from '../data/buildings'
 
-// Annual revenue per density level per zone type
 const ZONE_TAX: Record<Zone, number> = {
   [Zone.None]:        0,
   [Zone.Residential]: 8,
@@ -21,6 +21,9 @@ export function computeBudget(world: World): { revenue: number; expenses: number
     }
     if (tile.overlay & Overlay.Road) {
       expenses += ROAD_UPKEEP
+    }
+    if (tile.building !== Building.None) {
+      expenses += BUILDING_DEFS[tile.building].upkeep
     }
   })
 

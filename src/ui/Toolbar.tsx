@@ -1,13 +1,8 @@
-import { useState } from 'preact/hooks'
 import { Zone, Building, type ActiveTool } from '../core/tile'
 
-interface Props {
-  onToolChange: (tool: ActiveTool) => void
-}
+export type ToolKey = 'R' | 'C' | 'I' | 'PP' | 'WT' | 'road' | 'power' | 'bulldoze'
 
-type ToolKey = 'R' | 'C' | 'I' | 'PP' | 'WT' | 'road' | 'power' | 'bulldoze'
-
-function keyToTool(key: ToolKey): ActiveTool {
+export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'R')       return { kind: 'zone',     zone: Zone.Residential }
   if (key === 'C')       return { kind: 'zone',     zone: Zone.Commercial }
   if (key === 'I')       return { kind: 'zone',     zone: Zone.Industrial }
@@ -18,30 +13,31 @@ function keyToTool(key: ToolKey): ActiveTool {
   return { kind: 'bulldoze' }
 }
 
+interface Props {
+  activeKey:    ToolKey | null
+  onKeyChange:  (key: ToolKey | null) => void
+}
+
 const ZONE_BTNS: { key: ToolKey; label: string; bg: string; title: string }[] = [
-  { key: 'R', label: 'R', bg: '#4aaa4a', title: 'Residential zone' },
-  { key: 'C', label: 'C', bg: '#4a6eee', title: 'Commercial zone' },
-  { key: 'I', label: 'I', bg: '#eecc4a', title: 'Industrial zone' },
+  { key: 'R', label: 'R', bg: '#4aaa4a', title: 'Residential zone [1]' },
+  { key: 'C', label: 'C', bg: '#4a6eee', title: 'Commercial zone [2]' },
+  { key: 'I', label: 'I', bg: '#eecc4a', title: 'Industrial zone [3]' },
 ]
 
 const INFRA_BTNS: { key: ToolKey; label: string; bg: string; title: string }[] = [
-  { key: 'PP',   label: '⚙',  bg: '#3a3a3a', title: 'Power Plant ($5,000)' },
-  { key: 'WT',   label: '~',  bg: '#2d5c7a', title: 'Water Tower ($500)' },
-  { key: 'road', label: '━',  bg: '#2a2a2a', title: 'Road' },
-  { key: 'power',label: '⚡', bg: '#2a2a2a', title: 'Power line' },
+  { key: 'PP',    label: '⚙',  bg: '#3a3a3a', title: 'Power Plant ($5,000) [P]' },
+  { key: 'WT',    label: '~',  bg: '#2d5c7a', title: 'Water Tower ($500) [W]' },
+  { key: 'road',  label: '━',  bg: '#2a2a2a', title: 'Road ($10/tile) [R]' },
+  { key: 'power', label: '⚡', bg: '#2a2a2a', title: 'Power line ($5/tile) [L]' },
 ]
 
 const UTIL_BTNS: { key: ToolKey; label: string; title: string }[] = [
-  { key: 'bulldoze', label: '✕', title: 'Bulldoze' },
+  { key: 'bulldoze', label: '✕', title: 'Bulldoze [B]' },
 ]
 
-export function Toolbar({ onToolChange }: Props) {
-  const [active, setActive] = useState<ToolKey | null>(null)
-
+export function Toolbar({ activeKey, onKeyChange }: Props) {
   function handleClick(key: ToolKey) {
-    const next = active === key ? null : key
-    setActive(next)
-    onToolChange(next ? keyToTool(next) : null)
+    onKeyChange(activeKey === key ? null : key)
   }
 
   const btn = (key: ToolKey, label: string, bg: string, fg: string, title: string) => (
@@ -51,7 +47,7 @@ export function Toolbar({ onToolChange }: Props) {
       onClick={() => handleClick(key)}
       style={{
         width: 38, height: 38,
-        border:      `2px solid ${active === key ? '#fff' : 'transparent'}`,
+        border:      `2px solid ${activeKey === key ? '#fff' : 'transparent'}`,
         background:  bg,
         color:       fg,
         cursor:      'pointer',

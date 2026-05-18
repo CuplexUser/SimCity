@@ -33,7 +33,7 @@ export class Renderer {
 
     drawTiles(ctx, world, camera, W, H, sprites)
 
-    this.minimap.draw(ctx, W - 170, H - 138)
+    this.minimap.draw(ctx, W, H, camera)
   }
 
   resize(w: number, h: number): void {
