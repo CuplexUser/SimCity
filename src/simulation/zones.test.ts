@@ -34,6 +34,46 @@ describe('stepZones', () => {
     expect(world.get(5, 5).density).toBe(2)
   })
 
+  it('residential density grows when a road is two tiles away', () => {
+    const world = new World()
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 7, { overlay: Overlay.Road })
+    world.set(5, 8, { overlay: Overlay.Road })
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(2)
+  })
+
+  it('center tile of a 3x3 zone block grows when surrounded by roads', () => {
+    const world = new World()
+
+    for (let row = 4; row <= 6; row++) {
+      for (let col = 4; col <= 6; col++) {
+        world.set(col, row, { zone: Zone.Residential, density: 1, powered: true })
+      }
+    }
+
+    for (let col = 3; col <= 7; col++) {
+      world.set(col, 3, { overlay: Overlay.Road })
+      world.set(col, 7, { overlay: Overlay.Road })
+    }
+    for (let row = 3; row <= 7; row++) {
+      world.set(3, row, { overlay: Overlay.Road })
+      world.set(7, row, { overlay: Overlay.Road })
+    }
+
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(2)
+  })
+
+  it('density does not grow when the nearest road is three tiles away', () => {
+    const world = new World()
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 8, { overlay: Overlay.Road })
+    world.set(5, 9, { overlay: Overlay.Road })
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(1)
+  })
+
   it('density does not grow without power', () => {
     const world = new World()
     world.set(5, 5, { zone: Zone.Residential, density: 1, powered: false })

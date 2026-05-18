@@ -17,3 +17,5 @@ Original prompt: Continue with the implementation plan according to the TODO.md 
 - Added bulldozer modes: normal demolition, clear/level terrain, and zoning-only removal. Covered behavior in `src/core/bulldoze.test.ts`.
 - Added toolbar options menu with New City, Save City, and Load City. Save/load now stores full game state metadata as well as world tiles.
 - Named city saves are now listed in the options menu; New City uses a fresh randomized terrain seed.
+- Widened zone road access from direct adjacency to roads up to 2 cardinal tiles away, preserving the connected-road requirement. Added regression coverage for 3x3 zones surrounded by roads and a three-tile-away negative case.
+- Verified the road-access change with Vitest (92 tests), `pnpm typecheck`, `pnpm build`, and a Playwright smoke run against Vite. Latest screenshot loaded with the map visible and no captured console errors.

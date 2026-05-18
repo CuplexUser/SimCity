@@ -12,12 +12,12 @@
 - [x] Minimap
 - [x] Basic UI — Toolbar + BottomBar
 - [x] Sim tick (1 Hz) + year counter
-- [x] Zone growth simulation (density stages 0–8, grows on road + power access)
+- [x] Zone growth simulation (density stages 0–8, grows on power + road access within 2 tiles)
 - [x] Power network (BFS flood-fill, 50-tile range from Power Plant)
 - [x] Water network (BFS flood-fill, 20-tile range from Water Tower)
 - [x] Annual budget engine (zone tax revenue, road upkeep expenses)
 - [x] City log (year-end budget summary + population milestones)
-- [x] Road connectivity check (A* in utils/astar.ts; zones require connected road segment ≥2 tiles)
+- [x] Road connectivity check (A* in utils/astar.ts; zones require connected road segment ≥2 tiles within 2-tile road access)
 
 ## Phase 2 — Services
 - [x] Police stations (coverage radius → crime reduction)
@@ -63,7 +63,7 @@
 - [x] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power/plant, W = water tower, L = power line, B = bulldoze, Escape = deselect, +/- = zoom.
 - [x] **Speed control UI**: Pause / 1× / 2× / 3× (SpeedControl.tsx).
 - [ ] **Save/load**: IndexedDB via idb-keyval; RLE-compress grid; multiple slots + autosave.
-- [x] **Tests**: Vitest — 89 tests across core, rendering, simulation, and utility modules.
+- [x] **Tests**: Vitest — 92 tests across core, rendering, simulation, and utility modules.
 
 ## Utilities still to implement
 - [x] `src/utils/astar.ts` — A* for road connectivity + `isRoadConnected` BFS

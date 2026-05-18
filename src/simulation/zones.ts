@@ -60,15 +60,19 @@ export function stepZones(world: World, isYearTick: boolean): ZoneResult {
 function hasRoadAccess(world: World, col: number, row: number): boolean {
   const dirs = [{ dc: 0, dr: 1 }, { dc: 0, dr: -1 }, { dc: 1, dr: 0 }, { dc: -1, dr: 0 }]
   const candidates: Array<{ col: number; row: number }> = []
+  const maxRoadAccessDistance = 2
 
   if (world.get(col, row).overlay & Overlay.Road) candidates.push({ col, row })
   for (const { dc, dr } of dirs) {
-    const nc = col + dc, nr = row + dr
-    if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.Road)) {
-      candidates.push({ col: nc, row: nr })
+    for (let distance = 1; distance <= maxRoadAccessDistance; distance++) {
+      const nc = col + dc * distance, nr = row + dr * distance
+      if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.Road)) {
+        candidates.push({ col: nc, row: nr })
+        break
+      }
     }
   }
 
-  // Require the adjacent road to be part of a connected segment (not an isolated stub)
+  // Require the accessed road to be part of a connected segment (not an isolated stub).
   return candidates.some(({ col: rc, row: rr }) => isRoadConnected(world, rc, rr, 1))
 }
