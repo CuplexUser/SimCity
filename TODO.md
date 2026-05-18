@@ -12,12 +12,12 @@
 - [x] Minimap
 - [x] Basic UI — Toolbar + BottomBar
 - [x] Sim tick (1 Hz) + year counter
-- [ ] Zone growth simulation (density stages 0–8)
-- [ ] Road connectivity check (A* or BFS)
-- [ ] Power network (flood-fill BFS from plants)
-- [ ] Water network (flood-fill BFS from towers/pumps)
-- [ ] Annual budget engine (zone tax revenue, service upkeep)
-- [ ] City log / news ticker
+- [x] Zone growth simulation (density stages 0–8, grows on road + power access)
+- [x] Power network (BFS flood-fill, 50-tile range from Power Plant)
+- [x] Water network (BFS flood-fill, 20-tile range from Water Tower)
+- [x] Annual budget engine (zone tax revenue, road upkeep expenses)
+- [x] City log (year-end budget summary + population milestones)
+- [ ] Road connectivity check (currently: adjacent-road check; A* needed for full connectivity)
 
 ## Phase 2 — Services
 - [ ] Police stations (coverage radius → crime reduction)
@@ -54,13 +54,11 @@
 - [ ] Tree planting + wilderness decay over time
 
 ## Technical debt / improvements
-- [ ] **Sprites**: Currently solid-color placeholder diamonds. Invest in SC2000-style
-      dithered procedural sprites (OffscreenCanvas sprite sheet per zoom level) once
-      Phase 1 gameplay is solid.
-- [ ] **Draw order**: Currently diagonal-sweep for flat terrain. Tall buildings need
-      a depth-sort by (row + col + height) to avoid overlap artifacts.
-- [ ] **Minimap redraw**: Currently redraws every frame. Cache as dirty flag; only
-      redraw when world changes (max 1 Hz).
+- [ ] **Sprites**: Pre-baked terrain diamonds (OffscreenCanvas) are implemented.
+      Still needed: SC2000-style dithered procedural textures instead of solid colors.
+- [ ] **Draw order**: Diagonal-sweep implemented. Tall buildings may need depth-sort
+      by (row + col + buildingHeight) once multi-tile buildings are added.
+- [x] **Minimap redraw**: Dirty-flag implemented — only rebakes when world changes.
 - [ ] **Viewport indicator**: Show camera viewport rect on minimap.
 - [ ] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power, B = bulldoze,
       Escape = deselect, +/- = zoom.

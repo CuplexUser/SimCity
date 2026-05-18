@@ -2,9 +2,11 @@ import { type World } from '../core/world'
 import { type IsoCamera } from './isoCamera'
 import { drawTiles } from './tileRenderer'
 import { Minimap } from './minimap'
+import { SpriteSheet } from './sprites'
 
 export class Renderer {
-  private ctx:     CanvasRenderingContext2D
+  private ctx:      CanvasRenderingContext2D
+  private sprites:  SpriteSheet
   readonly minimap: Minimap
 
   constructor(
@@ -16,10 +18,12 @@ export class Renderer {
     if (!ctx) throw new Error('Could not get canvas 2D context')
     this.ctx     = ctx
     this.minimap = new Minimap(world)
+    this.sprites = new SpriteSheet()
+    this.sprites.bakeAll()
   }
 
   draw(): void {
-    const { ctx, canvas, world, camera } = this
+    const { ctx, canvas, world, camera, sprites } = this
     const W = canvas.width
     const H = canvas.height
 
@@ -27,9 +31,8 @@ export class Renderer {
     ctx.fillStyle = '#1a1a2e'
     ctx.fillRect(0, 0, W, H)
 
-    drawTiles(ctx, world, camera, W, H)
+    drawTiles(ctx, world, camera, W, H, sprites)
 
-    // Minimap — bottom-right corner
     this.minimap.draw(ctx, W - 170, H - 138)
   }
 

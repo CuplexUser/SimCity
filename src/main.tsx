@@ -2,16 +2,16 @@ import { render } from 'preact'
 import { useState, useEffect, useRef } from 'preact/hooks'
 import { Engine } from './core/engine'
 import { generateWorld } from './data/worldGen'
-import { Zone, Overlay, type ActiveTool } from './core/tile'
-import { type YearEvent } from './core/events'
-import { events } from './core/events'
+import { Zone, Overlay, Building, type ActiveTool } from './core/tile'
+import { events, type YearEvent } from './core/events'
 import { Toolbar } from './ui/Toolbar'
 import { BottomBar } from './ui/BottomBar'
+import { CityLog } from './ui/CityLog'
 
 function App() {
-  const canvasRef   = useRef<HTMLCanvasElement>(null)
-  const engineRef   = useRef<Engine | null>(null)
-  const toolRef     = useRef<ActiveTool>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const engineRef = useRef<Engine | null>(null)
+  const toolRef   = useRef<ActiveTool>(null)
 
   const [year,  setYear]  = useState(2000)
   const [pop,   setPop]   = useState(0)
@@ -31,32 +31,24 @@ function App() {
     generateWorld(eng.world)
     eng.start()
 
-    // ── Input handlers ─────────────────────────────────────────────────────
+    // ── Input ──────────────────────────────────────────────────────────────
 
     let dragging = false
-    let lastX = 0
-    let lastY = 0
+    let lastX = 0, lastY = 0
 
     function onMouseDown(e: MouseEvent) {
-      // Middle or right mouse button pans
       if (e.button === 1 || e.button === 2) {
-        dragging = true
-        lastX    = e.clientX
-        lastY    = e.clientY
+        dragging = true; lastX = e.clientX; lastY = e.clientY
       }
     }
-
     function onMouseMove(e: MouseEvent) {
       if (!dragging) return
       eng.camera.pan(e.clientX - lastX, e.clientY - lastY)
-      lastX = e.clientX
-      lastY = e.clientY
+      lastX = e.clientX; lastY = e.clientY
     }
-
     function onMouseUp() { dragging = false }
 
     function onClick(e: MouseEvent) {
-      // Only left-click places tiles
       if (e.button !== 0) return
       const tool = toolRef.current
       if (!tool) return
@@ -66,9 +58,14 @@ function App() {
 
       switch (tool.kind) {
         case 'zone':
-          eng.world.set(col, row, { zone: tool.zone, density: 0 })
+          eng.world.set(col, row, { zone: tool.zone, density: 0, building: Building.None })
           eng.renderer.minimap.markDirty()
           break
+        case 'building': {
+          // Clear zone when placing a building
+          eng.world.set(col, row, { building: tool.building, zone: Zone.None, density: 0 })
+          break
+        }
         case 'road': {
           const t = eng.world.get(col, row)
           eng.world.set(col, row, { overlay: t.overlay | Overlay.Road })
@@ -80,7 +77,10 @@ function App() {
           break
         }
         case 'bulldoze':
-          eng.world.set(col, row, { zone: Zone.None, overlay: 0, density: 0 })
+          eng.world.set(col, row, {
+            zone: Zone.None, overlay: 0, density: 0,
+            building: Building.None,
+          })
           eng.renderer.minimap.markDirty()
           break
       }
@@ -96,15 +96,13 @@ function App() {
       canvas.height = window.innerHeight
     }
 
-    canvas.addEventListener('mousedown',    onMouseDown)
-    canvas.addEventListener('mousemove',    onMouseMove)
-    canvas.addEventListener('mouseup',      onMouseUp)
-    canvas.addEventListener('click',        onClick)
-    canvas.addEventListener('wheel',        onWheel, { passive: false })
-    canvas.addEventListener('contextmenu',  e => e.preventDefault())
-    window.addEventListener('resize',       onResize)
-
-    // ── Event subscriptions ────────────────────────────────────────────────
+    canvas.addEventListener('mousedown',   onMouseDown)
+    canvas.addEventListener('mousemove',   onMouseMove)
+    canvas.addEventListener('mouseup',     onMouseUp)
+    canvas.addEventListener('click',       onClick)
+    canvas.addEventListener('wheel',       onWheel, { passive: false })
+    canvas.addEventListener('contextmenu', e => e.preventDefault())
+    window.addEventListener('resize',      onResize)
 
     const offYear = events.on<YearEvent>('year', ({ year, revenue, expenses }) => {
       setYear(year)
@@ -129,6 +127,7 @@ function App() {
       <canvas ref={canvasRef} style={{ display: 'block' }} />
       <Toolbar onToolChange={handleToolChange} />
       <BottomBar year={year} population={pop} funds={funds} />
+      <CityLog />
     </div>
   )
 }

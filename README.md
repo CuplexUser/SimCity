@@ -28,5 +28,12 @@ pnpm typecheck  # run tsc without emitting
 
 ## Deploy
 
-Connected to Cloudflare Pages — push to `main` triggers an automatic build.
-Build command: `pnpm build` · Output directory: `dist/`
+Build and rsync to the VPS:
+
+```bash
+pnpm build
+rsync -avz --delete dist/ user@vps:/var/www/webcity/
+```
+
+nginx serves `dist/` as a static SPA with an `/index.html` fallback. SSL via Certbot.
+See `simcity-plan.md` for full server setup.
