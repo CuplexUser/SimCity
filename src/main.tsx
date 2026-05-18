@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { useState, useEffect, useRef } from 'preact/hooks'
 import { Engine } from './core/engine'
 import { generateWorld } from './data/worldGen'
-import { Zone, Overlay, Building, type ActiveTool } from './core/tile'
+import { Zone, Overlay, Building, Terrain, type ActiveTool } from './core/tile'
 import { events, type YearEvent } from './core/events'
 import { Toolbar, keyToTool, type ToolKey } from './ui/Toolbar'
 import { BottomBar } from './ui/BottomBar'
@@ -83,35 +83,48 @@ function App() {
       const { col, row } = hit
       if (!eng.world.inBounds(col, row)) return
 
+      const t = eng.world.get(col, row)
+
       switch (tool.kind) {
         case 'zone': {
-          const cost = ZONE_COST[tool.zone]
-          if (!spendFunds(cost)) return
-          eng.world.set(col, row, { zone: tool.zone, density: 0, building: Building.None })
+          if (t.building !== Building.None) return  // must bulldoze first
+          if (t.density > 0)               return  // developed — must bulldoze first
+          if (t.zone === tool.zone)        return  // already this zone, no-op
+          if (t.terrain === Terrain.Water) return  // can't zone water
+          if (!spendFunds(ZONE_COST[tool.zone])) return
+          eng.world.set(col, row, { zone: tool.zone, density: 0 })
           eng.renderer.minimap.markDirty()
           break
         }
         case 'building': {
+          if (t.building !== Building.None) return  // already a building
+          if (t.density > 0)               return  // developed zone — bulldoze first
+          if (t.terrain === Terrain.Water) return  // can't build on water
+          if (t.building === tool.building) return  // same building already here
           const def = BUILDING_DEFS[tool.building]
           if (!spendFunds(def.cost)) return
           eng.world.set(col, row, { building: tool.building, zone: Zone.None, density: 0 })
           break
         }
         case 'road': {
-          const t = eng.world.get(col, row)
-          if (t.overlay & Overlay.Road) return   // already a road, no re-charge
+          if (t.overlay & Overlay.Road)     return  // already a road
+          if (t.building !== Building.None) return  // can't lay road through a building
+          if (t.density > 0)               return  // developed zone — bulldoze first
+          if (t.terrain === Terrain.Water) return  // no bridges yet
           if (!spendFunds(OVERLAY_COST[Overlay.Road] ?? 0)) return
           eng.world.set(col, row, { overlay: t.overlay | Overlay.Road })
           break
         }
         case 'power': {
-          const t = eng.world.get(col, row)
-          if (t.overlay & Overlay.PowerLine) return
+          if (t.overlay & Overlay.PowerLine) return  // already a power line
+          if (t.building !== Building.None)  return  // can't wire through a building
           if (!spendFunds(OVERLAY_COST[Overlay.PowerLine] ?? 0)) return
           eng.world.set(col, row, { overlay: t.overlay | Overlay.PowerLine })
           break
         }
         case 'bulldoze':
+          if (t.building === Building.None && t.zone === Zone.None &&
+              t.overlay === 0 && t.density === 0) return  // nothing to bulldoze
           eng.world.set(col, row, {
             zone: Zone.None, overlay: 0, density: 0, building: Building.None,
           })
