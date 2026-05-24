@@ -24,10 +24,5 @@
     "typescript": "^5.3.3",
     "vite": "^5.2.0",
     "vitest": "^2.1.9"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  }
+  }  
 }
