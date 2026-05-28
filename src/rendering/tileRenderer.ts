@@ -69,7 +69,7 @@ export function drawTiles(
       if (tile.elevation > 0) drawElevationSides(ctx, cx, cy, hw, hh, eh)
 
       // Terrain face
-      const bitmap = sprites.get(tile.terrain, zoom)
+      const bitmap = sprites.get(tile.terrain, zoom, col, row)
       if (bitmap) {
         ctx.drawImage(bitmap, cx - hw, cy)
       } else {

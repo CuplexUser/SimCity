@@ -54,8 +54,7 @@
 - [ ] Tree planting + wilderness decay over time
 
 ## Technical debt / improvements
-- [ ] **Sprites**: Pre-baked terrain diamonds (OffscreenCanvas) are implemented.
-      Still needed: SC2000-style dithered procedural textures instead of solid colors.
+- [x] **Sprites**: Pre-baked terrain diamonds now use SC2000-style dithered procedural textures instead of solid colors.
 - [ ] **Draw order**: Diagonal-sweep implemented. Tall buildings may need depth-sort
       by (row + col + buildingHeight) once multi-tile buildings are added.
 - [x] **Minimap redraw**: Dirty-flag implemented — only rebakes when world changes.
