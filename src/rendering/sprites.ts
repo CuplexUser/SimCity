@@ -32,7 +32,6 @@ export function zoneFillColor(zone: Zone): string {
   }
 }
 
-// Draw an isometric diamond. (cx, cy) is the top apex.
 export function drawDiamond(ctx: Ctx2D, cx: number, cy: number, hw: number, hh: number, fill: string): void {
   ctx.beginPath()
   ctx.moveTo(cx,      cy)
@@ -45,20 +44,14 @@ export function drawDiamond(ctx: Ctx2D, cx: number, cy: number, hw: number, hh: 
 }
 
 function hexToRgb(hex: string): [number, number, number] {
-  const value = hex.slice(1)
-  return [
-    Number.parseInt(value.slice(0, 2), 16),
-    Number.parseInt(value.slice(2, 4), 16),
-    Number.parseInt(value.slice(4, 6), 16),
-  ]
+  const v = hex.slice(1)
+  return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)]
 }
 
-function clampByte(value: number): number {
-  return Math.max(0, Math.min(255, Math.round(value)))
-}
+function clampByte(n: number): number { return Math.max(0, Math.min(255, Math.round(n))) }
 
-function shade([r, g, b]: [number, number, number], amount: number): [number, number, number] {
-  return [clampByte(r + amount), clampByte(g + amount), clampByte(b + amount)]
+function shade([r, g, b]: [number, number, number], amt: number): [number, number, number] {
+  return [clampByte(r + amt), clampByte(g + amt), clampByte(b + amt)]
 }
 
 function hash2(x: number, y: number, seed: number): number {
@@ -68,10 +61,10 @@ function hash2(x: number, y: number, seed: number): number {
 }
 
 function seededRandom(seed: number): () => number {
-  let state = seed >>> 0
+  let s = seed >>> 0
   return () => {
-    state += 0x6d2b79f5
-    let t = state
+    s += 0x6d2b79f5
+    let t = s
     t = Math.imul(t ^ (t >>> 15), t | 1)
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
@@ -82,170 +75,193 @@ function inDiamond(x: number, y: number, hw: number, hh: number): boolean {
   return Math.abs(x - hw) / hw + Math.abs(y - hh) / hh <= 1
 }
 
-const GRASS_VARIANTS = 32
-const GRASS_NOISES = Array.from({ length: GRASS_VARIANTS }, (_, i) => createNoise2D(seededRandom(7103 + i * 997)))
+// ── Noise ──────────────────────────────────────────────────────────────────────
 
-function terrainTone(terrain: Terrain, x: number, y: number, zoom: number, variant: number): [number, number, number] {
-  const ux = x / zoom
-  const uy = y / zoom
-  const seed = terrain * 97 + variant * 131
-  const n1 = hash2(Math.floor(ux), Math.floor(uy), seed + 11)
-  const n2 = hash2(Math.floor(ux / 3), Math.floor(uy / 3), seed + 41)
+// Two world-space grass noise functions — single seed → no per-tile discontinuity
+const GRASS_A = createNoise2D(seededRandom(7103))
+const GRASS_B = createNoise2D(seededRandom(8219))
 
+// Local-coordinate noise for Water / Dirt / Forest (tile-local, 1 sprite per zoom)
+const WATER_NOISE  = createNoise2D(seededRandom(4814))
+const DIRT_NOISE   = createNoise2D(seededRandom(5423))
+const FOREST_NOISE = createNoise2D(seededRandom(6037))
+
+// ── Per-pixel terrain colour ───────────────────────────────────────────────────
+
+function terrainTone(
+  terrain: Terrain, x: number, y: number, zoom: number, col: number, row: number,
+): [number, number, number] {
   switch (terrain) {
     case Terrain.Grass: {
-      const base = hexToRgb(PALETTE.grass)
-      const noise = GRASS_NOISES[variant % GRASS_VARIANTS]
-      const warp = noise(ux * 0.055 + 17, uy * 0.055 - 23) * 2.4
-      const broad = noise((ux + warp) * 0.075, (uy - warp) * 0.095)
-      const mid = noise(ux * 0.22 - 31, uy * 0.18 + 11)
-      const fine = n1 > 0.90 ? 10 : n1 < 0.16 ? -8 : 0
-      return shade(base, broad * 15 + mid * 6 + fine + (n2 > 0.62 ? 3 : -2))
+      // World-space coordinates — continuous across tile boundaries
+      const wx = col + x / (TILE_W * zoom)
+      const wy = row + y / (TILE_H * zoom)
+      const base  = hexToRgb(PALETTE.grass)
+      const warp  = GRASS_A(wx * 0.20 + 4.7, wy * 0.22 - 3.1) * 1.2
+      const broad = GRASS_A((wx + warp) * 0.38, (wy + warp) * 0.42)
+      const mid   = GRASS_B(wx * 0.90 - 6.3, wy * 1.05 + 4.9)
+      return shade(base, broad * 8 + mid * 4)
     }
     case Terrain.Water: {
-      const base = hexToRgb(PALETTE.water)
-      const ripple = Math.sin((ux + uy * 1.7) * 0.45) > 0.68 ? 20 : -3
-      return shade(base, ripple + (n2 > 0.72 ? 8 : -7))
+      const ux = x / zoom, uy = y / zoom
+      const base   = hexToRgb(PALETTE.water)
+      const ripple = Math.sin((ux + uy * 1.7) * 0.42) > 0.66 ? 18 : -3
+      const depth  = WATER_NOISE(ux * 0.11 + 3.1, uy * 0.14 - 5.3)
+      return shade(base, ripple + depth * 9)
     }
     case Terrain.Dirt: {
-      const base = hexToRgb(PALETTE.dirt)
-      return shade(base, n1 > 0.72 ? 20 : n2 > 0.50 ? 4 : -10)
+      const ux = x / zoom, uy = y / zoom
+      const base  = hexToRgb(PALETTE.dirt)
+      const broad = DIRT_NOISE(ux * 0.10 + 11, uy * 0.10 - 7)
+      const mid   = DIRT_NOISE(ux * 0.32 - 5,  uy * 0.29 + 3)
+      return shade(base, broad * 17 + mid * 7)
     }
     case Terrain.Forest: {
-      const base = hexToRgb(PALETTE.forest)
-      const canopy = hash2(Math.floor(ux / 2), Math.floor(uy / 2), 97)
-      return shade(base, canopy > 0.62 ? 18 : n1 > 0.68 ? -14 : 3)
+      const ux = x / zoom, uy = y / zoom
+      const base   = hexToRgb(PALETTE.forest)
+      const canopy = FOREST_NOISE(ux * 0.17 + 7,  uy * 0.17 - 3)
+      const shadow = FOREST_NOISE(ux * 0.42 - 11, uy * 0.38 + 9)
+      return shade(base, canopy * 20 + shadow * 7)
     }
   }
 }
 
-function drawTerrainTexture(ctx: Ctx2D, terrain: Terrain, hw: number, hh: number, zoom: number, variant = 0): void {
+// ── Texture painter ────────────────────────────────────────────────────────────
+
+function drawTerrainTexture(
+  ctx: Ctx2D, terrain: Terrain, hw: number, hh: number, zoom: number,
+  col = 0, row = 0,
+): void {
   const w = Math.ceil(hw * 2)
   const h = Math.ceil(hh * 2)
-  const img = ctx.createImageData(w, h)
+  const img  = ctx.createImageData(w, h)
   const data = img.data
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (!inDiamond(x + 0.5, y + 0.5, hw, hh)) continue
       const idx = (y * w + x) * 4
-      const [r, g, b] = terrainTone(terrain, x, y, zoom, variant)
-      data[idx] = r
-      data[idx + 1] = g
-      data[idx + 2] = b
-      data[idx + 3] = 255
+      const [r, g, b] = terrainTone(terrain, x, y, zoom, col, row)
+      data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 255
     }
   }
-
   ctx.putImageData(img, 0, 0)
 
+  // Post-process overlays (clipped to diamond)
   ctx.save()
   ctx.beginPath()
-  ctx.moveTo(hw, 0)
-  ctx.lineTo(hw * 2, hh)
-  ctx.lineTo(hw, hh * 2)
-  ctx.lineTo(0, hh)
+  ctx.moveTo(hw, 0); ctx.lineTo(hw * 2, hh); ctx.lineTo(hw, hh * 2); ctx.lineTo(0, hh)
   ctx.closePath()
   ctx.clip()
 
   if (terrain === Terrain.Water) {
-    ctx.strokeStyle = 'rgba(190,230,255,0.20)'
+    ctx.strokeStyle = 'rgba(190,230,255,0.18)'
     ctx.lineWidth = Math.max(1, zoom)
-    for (let y = hh * 0.45; y < hh * 1.65; y += Math.max(4, 6 * zoom)) {
+    for (let ly = hh * 0.45; ly < hh * 1.65; ly += Math.max(4, 6 * zoom)) {
       ctx.beginPath()
-      ctx.moveTo(hw * 0.30, y)
-      ctx.quadraticCurveTo(hw, y + 2 * zoom, hw * 1.70, y)
+      ctx.moveTo(hw * 0.28, ly)
+      ctx.quadraticCurveTo(hw, ly + 2 * zoom, hw * 1.72, ly)
       ctx.stroke()
     }
   } else if (terrain === Terrain.Forest) {
-    ctx.fillStyle = 'rgba(18,45,12,0.28)'
+    ctx.fillStyle = 'rgba(18,45,12,0.26)'
     const r = Math.max(1, 1.6 * zoom)
     for (let i = 0; i < 36; i++) {
-      const x = hash2(i, 3, 131) * hw * 2
-      const y = hash2(i, 9, 137) * hh * 2
-      if (inDiamond(x, y, hw, hh)) {
-        ctx.beginPath()
-        ctx.arc(x, y, r, 0, Math.PI * 2)
-        ctx.fill()
+      const fx = hash2(i, 3, 131) * hw * 2
+      const fy = hash2(i, 9, 137) * hh * 2
+      if (inDiamond(fx, fy, hw, hh)) {
+        ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI * 2); ctx.fill()
       }
     }
   } else if (terrain === Terrain.Grass) {
-    ctx.lineWidth = Math.max(0.5, zoom * 0.45)
-    for (let i = 0; i < 16; i++) {
-      const x = hash2(i, variant + 4, 211) * hw * 2
-      const y = hash2(i, variant + 8, 223) * hh * 2
-      if (inDiamond(x, y, hw, hh)) {
-        const lean = (hash2(i, variant, 229) - 0.5) * 4 * zoom
-        const length = (1.2 + hash2(i, variant, 233) * 2.0) * zoom
-        ctx.strokeStyle = hash2(i, variant, 239) > 0.42
-          ? 'rgba(205,236,132,0.14)'
-          : 'rgba(42,82,24,0.12)'
-        ctx.beginPath()
-        ctx.moveTo(x - lean * 0.25, y + length * 0.35)
-        ctx.lineTo(x + lean, y - length)
-        ctx.stroke()
-      }
+    // Grass blades: position anchored to tile world coords for stability
+    ctx.lineWidth = Math.max(0.5, zoom * 0.4)
+    for (let i = 0; i < 12; i++) {
+      const bx = hash2(i, col * 7 + 4,  211) * hw * 2
+      const by = hash2(i, row * 7 + 8,  223) * hh * 2
+      if (!inDiamond(bx, by, hw, hh)) continue
+      const lean   = (hash2(i, col + row,      229) - 0.5) * 3.5 * zoom
+      const length = (1.1 + hash2(i, col * 3 + row, 233) * 1.8) * zoom
+      ctx.strokeStyle = GRASS_A(bx / 10, by / 10) > 0
+        ? 'rgba(195,228,112,0.15)' : 'rgba(28,66,8,0.13)'
+      ctx.beginPath()
+      ctx.moveTo(bx - lean * 0.2, by + length * 0.3)
+      ctx.lineTo(bx + lean, by - length)
+      ctx.stroke()
     }
   }
 
   ctx.restore()
 }
 
-// Draw south and west vertical faces of an elevated tile.
-export function drawElevationSides(ctx: Ctx2D, cx: number, cy: number, hw: number, hh: number, sideH: number): void {
+// ── Elevation side faces ───────────────────────────────────────────────────────
+
+export function drawElevationSides(
+  ctx: Ctx2D, cx: number, cy: number, hw: number, hh: number, sideH: number,
+): void {
   const by = cy + hh * 2
+  ctx.beginPath()
+  ctx.moveTo(cx - hw, cy + hh); ctx.lineTo(cx, by)
+  ctx.lineTo(cx, by + sideH);   ctx.lineTo(cx - hw, cy + hh + sideH)
+  ctx.closePath()
+  ctx.fillStyle = PALETTE.faceDark; ctx.fill()
 
   ctx.beginPath()
-  ctx.moveTo(cx - hw, cy + hh)
-  ctx.lineTo(cx,      by)
-  ctx.lineTo(cx,      by + sideH)
-  ctx.lineTo(cx - hw, cy + hh + sideH)
+  ctx.moveTo(cx + hw, cy + hh); ctx.lineTo(cx, by)
+  ctx.lineTo(cx, by + sideH);   ctx.lineTo(cx + hw, cy + hh + sideH)
   ctx.closePath()
-  ctx.fillStyle = PALETTE.faceDark
-  ctx.fill()
-
-  ctx.beginPath()
-  ctx.moveTo(cx + hw, cy + hh)
-  ctx.lineTo(cx,      by)
-  ctx.lineTo(cx,      by + sideH)
-  ctx.lineTo(cx + hw, cy + hh + sideH)
-  ctx.closePath()
-  ctx.fillStyle = PALETTE.faceLight
-  ctx.fill()
+  ctx.fillStyle = PALETTE.faceLight; ctx.fill()
 }
 
-// Pre-baked ImageBitmap per (terrain, zoom, variant) — one drawImage replaces path ops.
+// ── Sprite cache ───────────────────────────────────────────────────────────────
+
 const ZOOM_STEPS = [0.5, 1, 2, 4]
+// Maximum cached grass sprites; evict oldest batch when exceeded
+const GRASS_MAX = 1800
 
 export class SpriteSheet {
   private cache = new Map<string, ImageBitmap>()
 
+  // Pre-bake non-grass terrains (small fixed count); grass is lazy per tile
   bakeAll(): void {
     for (const zoom of ZOOM_STEPS) {
-      for (const terrain of [Terrain.Grass, Terrain.Water, Terrain.Dirt, Terrain.Forest]) {
-        const variants = terrain === Terrain.Grass ? GRASS_VARIANTS : 1
-        for (let variant = 0; variant < variants; variant++) {
-          this.bake(terrain, zoom, variant)
-        }
+      for (const t of [Terrain.Water, Terrain.Dirt, Terrain.Forest]) {
+        this._bake(t, zoom, 0, 0)
       }
     }
   }
 
   get(terrain: Terrain, zoom: number, col = 0, row = 0): ImageBitmap | undefined {
-    const variant = terrain === Terrain.Grass
-      ? Math.floor(hash2(col, row, 811) * GRASS_VARIANTS)
-      : 0
-    return this.cache.get(`${terrain}-${zoom}-${variant}`)
+    const key = terrain === Terrain.Grass
+      ? `g${zoom}:${col},${row}`
+      : `${terrain}-${zoom}`
+
+    if (!this.cache.has(key)) {
+      if (terrain === Terrain.Grass) this._evictGrass()
+      this._bake(terrain, zoom, col, row)
+    }
+    return this.cache.get(key)
   }
 
-  private bake(terrain: Terrain, zoom: number, variant: number): void {
-    const hw = (TILE_W * zoom) / 2
-    const hh = (TILE_H * zoom) / 2
-    const w  = Math.ceil(TILE_W * zoom)
-    const h  = Math.ceil(TILE_H * zoom)
-    const oc  = new OffscreenCanvas(w, h)
+  private _evictGrass(): void {
+    if (this._grassCount() < GRASS_MAX) return
+    let removed = 0
+    for (const [k, bm] of this.cache) {
+      if (k[0] === 'g') { bm.close(); this.cache.delete(k); if (++removed >= 300) break }
+    }
+  }
+
+  private _grassCount(): number {
+    let n = 0; for (const k of this.cache.keys()) if (k[0] === 'g') n++; return n
+  }
+
+  private _bake(terrain: Terrain, zoom: number, col: number, row: number): void {
+    const hw  = (TILE_W * zoom) / 2
+    const hh  = (TILE_H * zoom) / 2
+    const oc  = new OffscreenCanvas(Math.ceil(TILE_W * zoom), Math.ceil(TILE_H * zoom))
     const ctx = oc.getContext('2d')!
-    drawTerrainTexture(ctx, terrain, hw, hh, zoom, variant)
-    this.cache.set(`${terrain}-${zoom}-${variant}`, oc.transferToImageBitmap())
+    drawTerrainTexture(ctx, terrain, hw, hh, zoom, col, row)
+    const key = terrain === Terrain.Grass ? `g${zoom}:${col},${row}` : `${terrain}-${zoom}`
+    this.cache.set(key, oc.transferToImageBitmap())
   }
 }

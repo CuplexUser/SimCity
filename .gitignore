@@ -25,6 +25,8 @@ client/src/version.ts
 settings.json
 settings.local.json
 
+/tests/
+
 # Playwright
 /output/
 /test-results/

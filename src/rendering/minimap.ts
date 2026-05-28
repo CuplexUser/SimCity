@@ -40,44 +40,49 @@ export class Minimap {
     }
   }
 
+  /**
+   * Draw the minimap into `ctx`, which should be the context of a dedicated
+   * MINI_W × MINI_H canvas.  Drawing always starts at (0, 0).
+   * `viewportW / viewportH` are the main game canvas dimensions used to
+   * project the viewport rectangle onto the minimap.
+   */
   draw(
     ctx: CanvasRenderingContext2D,
-    canvasW: number,
-    canvasH: number,
     camera: IsoCamera,
+    viewportW: number,
+    viewportH: number,
   ): void {
-    const { x, y, w, h } = Minimap.bounds(canvasW, canvasH)
+    const w = MINI_W, h = MINI_H
 
     // Background
     ctx.fillStyle = 'rgba(0,0,0,0.75)'
-    ctx.fillRect(x - 2, y - 2, w + 4, h + 4)
+    ctx.fillRect(0, 0, w, h)
 
     if (this.dirty) {
       this.rebake()
       this.dirty = false
     }
 
-    ctx.putImageData(this.imageData, x, y)
+    ctx.putImageData(this.imageData, 0, 0)
 
     // ── Viewport indicator ──────────────────────────────────────────────────
-    // Map the four screen corners to world tile coords, then to minimap pixels
     const scaleX = w / this.world.cols
     const scaleY = h / this.world.rows
 
     const corners = [
-      camera.screenToWorld(0,       0),
-      camera.screenToWorld(canvasW, 0),
-      camera.screenToWorld(0,       canvasH),
-      camera.screenToWorld(canvasW, canvasH),
+      camera.screenToWorld(0,          0),
+      camera.screenToWorld(viewportW,  0),
+      camera.screenToWorld(0,          viewportH),
+      camera.screenToWorld(viewportW,  viewportH),
     ]
 
-    const colMin = Math.max(0,                Math.min(...corners.map(c => c.col)))
-    const colMax = Math.min(this.world.cols,  Math.max(...corners.map(c => c.col)))
-    const rowMin = Math.max(0,                Math.min(...corners.map(c => c.row)))
-    const rowMax = Math.min(this.world.rows,  Math.max(...corners.map(c => c.row)))
+    const colMin = Math.max(0,              Math.min(...corners.map(c => c.col)))
+    const colMax = Math.min(this.world.cols, Math.max(...corners.map(c => c.col)))
+    const rowMin = Math.max(0,              Math.min(...corners.map(c => c.row)))
+    const rowMax = Math.min(this.world.rows, Math.max(...corners.map(c => c.row)))
 
-    const vx = x + colMin * scaleX
-    const vy = y + rowMin * scaleY
+    const vx = colMin * scaleX
+    const vy = rowMin * scaleY
     const vw = Math.max(2, (colMax - colMin) * scaleX)
     const vh = Math.max(2, (rowMax - rowMin) * scaleY)
 
@@ -85,10 +90,10 @@ export class Minimap {
     ctx.lineWidth   = 1
     ctx.strokeRect(Math.round(vx), Math.round(vy), Math.round(vw), Math.round(vh))
 
-    // Border around the whole minimap
+    // Border
     ctx.strokeStyle = 'rgba(255,255,255,0.4)'
     ctx.lineWidth   = 1
-    ctx.strokeRect(x, y, w, h)
+    ctx.strokeRect(0, 0, w, h)
   }
 
   private rebake(): void {

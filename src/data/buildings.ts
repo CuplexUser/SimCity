@@ -7,14 +7,18 @@ export interface BuildingDef {
 }
 
 export const BUILDING_DEFS: Record<Building, BuildingDef> = {
-  [Building.None]:          { cost: 0,      upkeep: 0,   label: '' },
-  [Building.PowerPlant]:    { cost: 5_000,  upkeep: 300, label: 'Power Plant' },
-  [Building.WaterTower]:    { cost: 500,    upkeep: 50,  label: 'Water Tower' },
-  [Building.PoliceStation]: { cost: 1_000,  upkeep: 100, label: 'Police Station' },
-  [Building.FireStation]:   { cost: 1_000,  upkeep: 100, label: 'Fire Station' },
-  [Building.Hospital]:      { cost: 1_500,  upkeep: 150, label: 'Hospital' },
-  [Building.School]:        { cost: 750,    upkeep: 75,  label: 'School' },
-  [Building.Library]:       { cost: 500,    upkeep: 50,  label: 'Library' },
+  [Building.None]:          { cost: 0,       upkeep: 0,   label: '' },
+  [Building.PowerPlant]:    { cost: 5_000,   upkeep: 300, label: 'Coal Plant' },
+  [Building.WaterTower]:    { cost: 500,     upkeep: 50,  label: 'Water Tower' },
+  [Building.PoliceStation]: { cost: 1_000,   upkeep: 100, label: 'Police Station' },
+  [Building.FireStation]:   { cost: 1_000,   upkeep: 100, label: 'Fire Station' },
+  [Building.Hospital]:      { cost: 1_500,   upkeep: 150, label: 'Hospital' },
+  [Building.School]:        { cost: 750,     upkeep: 75,  label: 'School' },
+  [Building.Library]:       { cost: 500,     upkeep: 50,  label: 'Library' },
+  [Building.GasTurbine]:    { cost: 3_000,   upkeep: 200, label: 'Gas Turbine' },
+  [Building.Nuclear]:       { cost: 15_000,  upkeep: 500, label: 'Nuclear Plant' },
+  [Building.SolarFarm]:     { cost: 2_000,   upkeep: 15,  label: 'Solar Farm' },
+  [Building.WindTurbine]:   { cost: 1_200,   upkeep: 25,  label: 'Wind Turbine' },
 }
 
 // Per-tile placement costs for zones and overlays

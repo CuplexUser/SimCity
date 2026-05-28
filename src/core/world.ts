@@ -7,6 +7,8 @@ export class World {
   readonly cols = WORLD_COLS
   readonly rows = WORLD_ROWS
   private tiles: Tile[]
+  /** Indices of tiles changed since last renderer drain. Renderer calls dirty.clear() after processing. */
+  readonly dirty = new Set<number>()
 
   constructor() {
     this.tiles = Array.from({ length: this.cols * this.rows }, defaultTile)
@@ -22,7 +24,9 @@ export class World {
 
   set(col: number, row: number, patch: Partial<Tile>): void {
     if (!this.inBounds(col, row)) return
-    Object.assign(this.tiles[row * this.cols + col], patch)
+    const idx = row * this.cols + col
+    Object.assign(this.tiles[idx], patch)
+    this.dirty.add(idx)
   }
 
   replaceFrom(source: World): void {

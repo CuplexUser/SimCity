@@ -28,6 +28,11 @@ export enum Building {
   Hospital      = 5,   // health coverage, 20-tile radius
   School        = 6,   // education coverage, 15-tile radius
   Library       = 7,   // education coverage, 10-tile radius (small bonus)
+  // Power plants — varying cost, range, and visual
+  GasTurbine    = 8,   // gas turbine — 40-tile range, moderate cost
+  Nuclear       = 9,   // nuclear plant — 80-tile range, very expensive
+  SolarFarm     = 10,  // solar array — 30-tile range, no fuel upkeep
+  WindTurbine   = 11,  // wind turbine — 25-tile range, cheap
 }
 
 export interface Tile {

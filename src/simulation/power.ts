@@ -2,25 +2,34 @@ import { type World } from '../core/world'
 import { Building, Terrain, Overlay } from '../core/tile'
 import { floodFill } from '../utils/floodfill'
 
-const POWER_RANGE = 50
+// Range in tiles for each power-producing building
+const POWER_RANGE: Partial<Record<Building, number>> = {
+  [Building.PowerPlant]: 50,
+  [Building.GasTurbine]: 40,
+  [Building.Nuclear]:    80,
+  [Building.SolarFarm]:  30,
+  [Building.WindTurbine]:25,
+}
 
 export function stepPower(world: World): void {
-  const sources: { col: number; row: number }[] = []
+  // Collect sources grouped by range so we can run one BFS per plant
+  const byRange = new Map<number, { col: number; row: number }[]>()
 
-  // Single pass: clear powered flags + collect plant locations
   world.forEach((tile, col, row) => {
     tile.powered = false
-    if (tile.building === Building.PowerPlant) sources.push({ col, row })
+    const range = POWER_RANGE[tile.building]
+    if (range !== undefined) {
+      if (!byRange.has(range)) byRange.set(range, [])
+      byRange.get(range)!.push({ col, row })
+    }
   })
 
-  if (sources.length === 0) return
+  const canPass = (tile: ReturnType<World['get']>) =>
+    tile.terrain !== Terrain.Water || !!(tile.overlay & Overlay.PowerLine)
 
-  // Power passes through any non-water tile, or water with a power line
-  floodFill(
-    world,
-    sources,
-    POWER_RANGE,
-    (tile) => tile.terrain !== Terrain.Water || !!(tile.overlay & Overlay.PowerLine),
-    (col, row) => { world.get(col, row).powered = true },
-  )
+  for (const [range, sources] of byRange) {
+    floodFill(world, sources, range, canPass, (c, r) => {
+      world.get(c, r).powered = true
+    })
+  }
 }

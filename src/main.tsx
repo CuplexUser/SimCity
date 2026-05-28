@@ -18,16 +18,16 @@ declare global {
   interface Window {
     render_game_to_text?: () => string
     advanceTime?: (ms: number) => void
+    __eng?: import('./core/engine').Engine
   }
 }
 
 function App() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const engineRef = useRef<Engine | null>(null)
-  const toolRef   = useRef<ActiveTool>(null)
-  // Keeps current funds in the effect closure without stale-closure issues
-  const fundsRef  = useRef(20_000)
-  const speedRef  = useRef(1)
+  const canvasRef  = useRef<HTMLCanvasElement>(null)
+  const engineRef  = useRef<Engine | null>(null)
+  const toolRef    = useRef<ActiveTool>(null)
+  const fundsRef   = useRef(20_000)
+  const speedRef   = useRef(1)
 
   const [activeKey, setActiveKey] = useState<ToolKey | null>(null)
   const [year,   setYear]   = useState(2000)
@@ -38,7 +38,6 @@ function App() {
   const [cityName, setCityName] = useState('New City')
   const [savedCities, setSavedCities] = useState<string[]>([])
 
-  // Sync toolRef whenever the toolbar selection changes (keyboard OR click)
   useEffect(() => {
     toolRef.current = activeKey ? keyToTool(activeKey) : null
   }, [activeKey])
@@ -59,7 +58,7 @@ function App() {
 
   function handleNewGame() {
     const eng = engineRef.current
-    if (!eng) return
+    if (!eng?.renderer) return
     const fresh = new World()
     generateWorld(fresh, Math.floor(Date.now() + Math.random() * 1_000_000))
     eng.world.replaceFrom(fresh)
@@ -73,7 +72,7 @@ function App() {
 
   async function handleSaveState() {
     const eng = engineRef.current
-    if (!eng) return
+    if (!eng?.renderer) return
     const name = normalizeCityName(cityName)
     try {
       await saveGameState(eng.world, {
@@ -92,14 +91,11 @@ function App() {
 
   async function handleLoadState() {
     const eng = engineRef.current
-    if (!eng) return
+    if (!eng?.renderer) return
     const name = normalizeCityName(cityName || savedCities[0] || '')
     try {
       const saved = await loadGameState(name)
-      if (!saved) {
-        setOptionsStatus('No saved city')
-        return
-      }
+      if (!saved) { setOptionsStatus('No saved city'); return }
       eng.world.replaceFrom(saved.world)
       eng.sim.reset(saved.sim)
       resetUiState(saved.sim.year, saved.sim.population, saved.sim.funds)
@@ -129,8 +125,8 @@ function App() {
 
     const eng = new Engine(canvas)
     engineRef.current = eng
-    generateWorld(eng.world)
-    eng.start()
+
+    // ── Global helpers ──────────────────────────────────────────────────────
 
     window.render_game_to_text = () => {
       const buildings: Record<string, number> = {}
@@ -158,7 +154,7 @@ function App() {
     window.advanceTime = (ms: number) => {
       const steps = Math.max(0, Math.floor((ms / 1000) * speedRef.current))
       for (let i = 0; i < steps; i++) eng.sim.step()
-      eng.renderer.draw()
+      eng.renderer?.draw()
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -204,44 +200,44 @@ function App() {
 
       switch (tool.kind) {
         case 'zone': {
-          if (t.building !== Building.None) return  // must bulldoze first
-          if (t.density > 0)               return  // developed — must bulldoze first
-          if (t.zone === tool.zone)        return  // already this zone, no-op
-          if (t.terrain === Terrain.Water) return  // can't zone water
+          if (t.building !== Building.None) return
+          if (t.density > 0)               return
+          if (t.zone === tool.zone)        return
+          if (t.terrain === Terrain.Water) return
           if (!spendFunds(ZONE_COST[tool.zone])) return
           eng.world.set(col, row, { zone: tool.zone, density: 0 })
-          eng.renderer.minimap.markDirty()
+          eng.renderer?.minimap.markDirty()
           break
         }
         case 'building': {
-          if (t.building !== Building.None) return  // already a building
-          if (t.density > 0)               return  // developed zone — bulldoze first
-          if (t.terrain === Terrain.Water) return  // can't build on water
-          if (t.building === tool.building) return  // same building already here
+          if (t.building !== Building.None) return
+          if (t.density > 0)               return
+          if (t.terrain === Terrain.Water) return
+          if (t.building === tool.building) return
           const def = BUILDING_DEFS[tool.building]
           if (!spendFunds(def.cost)) return
           eng.world.set(col, row, { building: tool.building, zone: Zone.None, density: 0 })
           break
         }
         case 'road': {
-          if (t.overlay & Overlay.Road)     return  // already a road
-          if (t.building !== Building.None) return  // can't lay road through a building
-          if (t.density > 0)               return  // developed zone — bulldoze first
-          if (t.terrain === Terrain.Water) return  // no bridges yet
+          if (t.overlay & Overlay.Road)     return
+          if (t.building !== Building.None) return
+          if (t.density > 0)               return
+          if (t.terrain === Terrain.Water) return
           if (!spendFunds(OVERLAY_COST[Overlay.Road] ?? 0)) return
           eng.world.set(col, row, { overlay: t.overlay | Overlay.Road })
           break
         }
         case 'power': {
-          if (t.overlay & Overlay.PowerLine) return  // already a power line
-          if (t.building !== Building.None)  return  // can't wire through a building
+          if (t.overlay & Overlay.PowerLine) return
+          if (t.building !== Building.None)  return
           if (!spendFunds(OVERLAY_COST[Overlay.PowerLine] ?? 0)) return
           eng.world.set(col, row, { overlay: t.overlay | Overlay.PowerLine })
           break
         }
         case 'bulldoze':
           if (!applyBulldoze(eng.world, col, row, tool.mode)) return
-          eng.renderer.minimap.markDirty()
+          eng.renderer?.minimap.markDirty()
           break
       }
     }
@@ -287,7 +283,7 @@ function App() {
     }
     function onMouseMove(e: MouseEvent) {
       if (minimapDragging) { panToMinimap(e.clientX, e.clientY); return }
-      if (panning) { eng.camera.pan(e.clientX - lastX, e.clientY - lastY); lastX = e.clientX; lastY = e.clientY }
+      if (panning)  { eng.camera.pan(e.clientX - lastX, e.clientY - lastY); lastX = e.clientX; lastY = e.clientY }
       if (painting) placeTile(e.clientX, e.clientY)
     }
     function onMouseUp(e: MouseEvent) {
@@ -298,7 +294,11 @@ function App() {
       e.preventDefault()
       eng.camera.snapZoom(e.deltaY, e.clientX, e.clientY)
     }
-    function onResize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
+    function onResize() {
+      canvas.width  = window.innerWidth
+      canvas.height = window.innerHeight
+      eng.renderer?.resize(canvas.width, canvas.height)
+    }
 
     canvas.addEventListener('mousedown',   onMouseDown)
     canvas.addEventListener('mousemove',   onMouseMove)
@@ -308,23 +308,22 @@ function App() {
     window.addEventListener('resize',      onResize)
 
     // ── Keyboard ─────────────────────────────────────────────────────────────
-    // setActiveKey is a stable React setter — safe to call from a [] closure.
 
     function onKeyDown(e: KeyboardEvent) {
       if ((e.target as HTMLElement).tagName === 'INPUT') return
       switch (e.key) {
-        case '1':                      setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('normal')  : k === 'R' ? null : 'R'); break
-        case '2':                      setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('terrain') : k === 'C' ? null : 'C'); break
-        case '3':                      setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('zoning')  : k === 'I' ? null : 'I'); break
-        case 'r': case 'R':            setActiveKey(k => k === 'road'     ? null : 'road');     break
-        case 'p': case 'P':            setActiveKey(k => k === 'PP'       ? null : 'PP');       break
-        case 'o': case 'O':            setActiveKey(k => k === 'PS'       ? null : 'PS');       break
-        case 'w': case 'W':            setActiveKey(k => k === 'WT'       ? null : 'WT');       break
-        case 'l': case 'L':            setActiveKey(k => k === 'power'    ? null : 'power');    break
-        case 'b': case 'B':            setActiveKey(k => k === 'dozeNormal' ? null : 'dozeNormal'); break
-        case 'Escape':                 setActiveKey(null);                                       break
-        case '+': case '=': eng.camera.snapZoom(-1, canvas.width / 2, canvas.height / 2);      break
-        case '-': case '_': eng.camera.snapZoom( 1, canvas.width / 2, canvas.height / 2);      break
+        case '1': setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('normal')  : k === 'R' ? null : 'R'); break
+        case '2': setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('terrain') : k === 'C' ? null : 'C'); break
+        case '3': setActiveKey(k => k?.startsWith('doze') ? bulldozeKeyForMode('zoning')  : k === 'I' ? null : 'I'); break
+        case 'r': case 'R': setActiveKey(k => k === 'road'      ? null : 'road');      break
+        case 'p': case 'P': setActiveKey(k => k === 'PP'        ? null : 'PP');        break
+        case 'o': case 'O': setActiveKey(k => k === 'PS'        ? null : 'PS');        break
+        case 'w': case 'W': setActiveKey(k => k === 'WT'        ? null : 'WT');        break
+        case 'l': case 'L': setActiveKey(k => k === 'power'     ? null : 'power');     break
+        case 'b': case 'B': setActiveKey(k => k === 'dozeNormal'? null : 'dozeNormal'); break
+        case 'Escape':       setActiveKey(null);                                         break
+        case '+': case '=':  eng.camera.snapZoom(-1, canvas.width / 2, canvas.height / 2); break
+        case '-': case '_':  eng.camera.snapZoom( 1, canvas.width / 2, canvas.height / 2); break
       }
     }
 
@@ -341,6 +340,15 @@ function App() {
       setFunds(fundsRef.current)
     })
 
+    // ── Async: init PixiJS renderer, then start ──────────────────────────────
+
+    eng.init().then(() => {
+      generateWorld(eng.world)
+      eng.renderer!.minimap.markDirty()
+      eng.start()
+      window.__eng = eng
+    })
+
     return () => {
       eng.stop()
       canvas.removeEventListener('mousedown',   onMouseDown)
@@ -351,6 +359,7 @@ function App() {
       window.removeEventListener('keydown',     onKeyDown)
       delete window.render_game_to_text
       delete window.advanceTime
+      delete window.__eng
       offYear()
     }
   }, [])

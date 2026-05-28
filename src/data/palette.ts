@@ -1,7 +1,7 @@
 export const PALETTE = {
   // Terrain
-  grass:     '#5a8a3c',
-  grassDark: '#3d6b28',
+  grass:     '#4a7830',
+  grassDark: '#344f1e',
   water:     '#1a5c8c',
   waterDeep: '#0d3d5c',
   dirt:      '#9b7a3d',
