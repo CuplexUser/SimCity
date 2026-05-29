@@ -17,15 +17,18 @@ describe('applyBulldoze', () => {
     })
 
     expect(applyBulldoze(world, 4, 4, 'normal')).toBe(true)
+    // zone is preserved when structures are present — second bulldoze clears the vacant zone
     expect(world.get(4, 4)).toMatchObject({
       terrain: Terrain.Forest,
       elevation: 6,
-      zone: Zone.None,
+      zone: Zone.Residential,
       density: 0,
       overlay: 0,
       building: Building.None,
       burning: false,
     })
+    expect(applyBulldoze(world, 4, 4, 'normal')).toBe(true)
+    expect(world.get(4, 4)).toMatchObject({ zone: Zone.None })
   })
 
   it('terrain mode clears development and levels to buildable grass', () => {
@@ -40,10 +43,10 @@ describe('applyBulldoze', () => {
       burning: true,
     })
 
-    expect(applyBulldoze(world, 2, 2, 'terrain')).toBe(true)
+    expect(applyBulldoze(world, 2, 2, 'terrain', 3)).toBe(true)
     expect(world.get(2, 2)).toMatchObject({
       terrain: Terrain.Grass,
-      elevation: 2,
+      elevation: 3,
       zone: Zone.None,
       density: 0,
       overlay: 0,

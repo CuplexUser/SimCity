@@ -38,7 +38,7 @@ export function stepZones(world: World, isYearTick: boolean): ZoneResult {
         (tile.zone === Zone.Industrial  && iDemand)
 
       if (demand && tile.density < 8 && tile.powered && hasRoadAccess(world, col, row)) {
-        tile.density++
+        world.set(col, row, { density: tile.density + 1 })
       }
 
       if (tile.zone === Zone.Residential) population += tile.density * 10

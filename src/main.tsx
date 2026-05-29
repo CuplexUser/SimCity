@@ -253,7 +253,7 @@ function App() {
           break
         }
         case 'bulldoze':
-          if (!applyBulldoze(eng.world, col, row, tool.mode)) return
+          if (!applyBulldoze(eng.world, col, row, tool.mode, tool.mode === 'terrain' ? terrainLevelTarget : undefined)) return
           eng.renderer?.minimap.markDirty()
           break
       }
@@ -261,10 +261,11 @@ function App() {
 
     // ── Mouse ────────────────────────────────────────────────────────────────
 
-    let panning         = false
-    let painting        = false
-    let minimapDragging = false
-    let lastX = 0, lastY = 0
+    let panning            = false
+    let painting           = false
+    let minimapDragging    = false
+    let lastX = 0, lastY   = 0
+    let terrainLevelTarget: number | undefined = undefined
 
     function canvasPos(clientX: number, clientY: number) {
       const r = canvas.getBoundingClientRect()
@@ -294,7 +295,16 @@ function App() {
           panToMinimap(e.clientX, e.clientY)
           return
         }
-        if (toolRef.current) { painting = true; placeTile(e.clientX, e.clientY) }
+        if (toolRef.current) {
+          // Capture the starting elevation for terrain levelling so drag stays consistent
+          if (toolRef.current.kind === 'bulldoze' && toolRef.current.mode === 'terrain') {
+            const rect = canvas.getBoundingClientRect()
+            const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
+            terrainLevelTarget = hit ? eng.world.get(hit.col, hit.row).elevation : undefined
+          }
+          painting = true
+          placeTile(e.clientX, e.clientY)
+        }
       }
       if (e.button === 1 || e.button === 2) { panning = true; lastX = e.clientX; lastY = e.clientY }
     }
@@ -310,7 +320,7 @@ function App() {
       else     eng.renderer?.clearHoverTile()
     }
     function onMouseUp(e: MouseEvent) {
-      if (e.button === 0) { minimapDragging = false; painting = false }
+      if (e.button === 0) { minimapDragging = false; painting = false; terrainLevelTarget = undefined }
       if (e.button === 1 || e.button === 2) panning = false
     }
     function onWheel(e: WheelEvent) {

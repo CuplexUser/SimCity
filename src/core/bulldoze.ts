@@ -1,9 +1,7 @@
 import { type World } from './world'
 import { Building, Terrain, Zone, type BulldozeMode } from './tile'
 
-const LEVEL_ELEVATION = 2
-
-export function applyBulldoze(world: World, col: number, row: number, mode: BulldozeMode): boolean {
+export function applyBulldoze(world: World, col: number, row: number, mode: BulldozeMode, targetElevation?: number): boolean {
   if (!world.inBounds(col, row)) return false
   const tile = world.get(col, row)
 
@@ -16,20 +14,32 @@ export function applyBulldoze(world: World, col: number, row: number, mode: Bull
       !tile.burning
     ) return false
 
-    world.set(col, row, {
-      zone: Zone.None,
-      overlay: 0,
-      density: 0,
-      building: Building.None,
-      burning: false,
-    })
+    const hasStructure =
+      tile.building !== Building.None ||
+      tile.density > 0 ||
+      tile.overlay !== 0 ||
+      tile.burning
+
+    if (hasStructure) {
+      // Remove building/overlay/density but preserve zone so it can regrow
+      world.set(col, row, {
+        overlay: 0,
+        density: 0,
+        building: Building.None,
+        burning: false,
+      })
+    } else {
+      // Vacant tile with only zone marking — clear it
+      world.set(col, row, { zone: Zone.None })
+    }
     return true
   }
 
   if (mode === 'terrain') {
+    const level = targetElevation ?? tile.elevation
     const changed =
       tile.terrain !== Terrain.Grass ||
-      tile.elevation !== LEVEL_ELEVATION ||
+      tile.elevation !== level ||
       tile.building !== Building.None ||
       tile.zone !== Zone.None ||
       tile.overlay !== 0 ||
@@ -40,7 +50,7 @@ export function applyBulldoze(world: World, col: number, row: number, mode: Bull
 
     world.set(col, row, {
       terrain: Terrain.Grass,
-      elevation: LEVEL_ELEVATION,
+      elevation: level,
       zone: Zone.None,
       overlay: 0,
       density: 0,

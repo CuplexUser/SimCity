@@ -164,14 +164,57 @@ export function drawTerrainTexture(
       ctx.stroke()
     }
   } else if (terrain === Terrain.Forest) {
-    ctx.fillStyle = 'rgba(18,45,12,0.26)'
-    const r = Math.max(1, 1.6 * zoom)
-    for (let i = 0; i < 36; i++) {
-      const fx = hash2(i, 3, 131) * hw * 2
-      const fy = hash2(i, 9, 137) * hh * 2
-      if (inDiamond(fx, fy, hw, hh)) {
-        ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI * 2); ctx.fill()
-      }
+    // Draw 6–8 isometric tree canopies per tile
+    const treeCount = 7
+    for (let i = 0; i < treeCount; i++) {
+      // Tile-local deterministic positions
+      const fx = hash2(i, 7, 131) * hw * 1.72 + hw * 0.14
+      const fy = hash2(i, 11, 137) * hh * 1.72 + hh * 0.14
+      if (!inDiamond(fx + 0.5, fy + 0.5, hw, hh)) continue
+
+      const sizeV = 0.65 + hash2(i, 5, 149) * 0.70   // size variation
+      const cr = Math.max(2.5, 4.2 * zoom * sizeV)   // canopy radius
+      const sh = cr * 0.38                             // shadow offset
+
+      // Ground shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.22)'
+      ctx.beginPath()
+      ctx.ellipse(fx + sh * 0.6, fy + sh, cr * 0.70, cr * 0.32, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Trunk (thin line)
+      ctx.strokeStyle = '#3d2510'
+      ctx.lineWidth   = Math.max(0.6, zoom * 0.55)
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - cr * 0.55)
+      ctx.stroke()
+
+      // Back canopy layer (dark, shifted slightly right/down for depth)
+      ctx.fillStyle = `rgba(22,55,12,0.90)`
+      ctx.beginPath()
+      ctx.ellipse(fx + cr * 0.12, fy - cr * 0.52 + cr * 0.08, cr * 0.78, cr * 0.78, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Main canopy (medium green)
+      const g1 = 68 + Math.floor(hash2(i, 3, 157) * 28)
+      ctx.fillStyle = `rgb(32,${g1},18)`
+      ctx.beginPath()
+      ctx.ellipse(fx - cr * 0.06, fy - cr * 0.58, cr * 0.74, cr * 0.74, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Front highlight canopy (lighter)
+      const g2 = 100 + Math.floor(hash2(i, 9, 163) * 36)
+      ctx.fillStyle = `rgb(52,${g2},28)`
+      ctx.beginPath()
+      ctx.ellipse(fx - cr * 0.14, fy - cr * 0.70, cr * 0.52, cr * 0.52, 0, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Specular highlight
+      ctx.fillStyle = 'rgba(140,200,80,0.18)'
+      ctx.beginPath()
+      ctx.ellipse(fx - cr * 0.24, fy - cr * 0.82, cr * 0.22, cr * 0.18, -0.4, 0, Math.PI * 2)
+      ctx.fill()
     }
   } else if (terrain === Terrain.Grass) {
     // Grass blades: position anchored to tile world coords for stability
