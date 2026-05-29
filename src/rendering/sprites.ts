@@ -128,7 +128,7 @@ function terrainTone(
 
 // ── Texture painter ────────────────────────────────────────────────────────────
 
-function drawTerrainTexture(
+export function drawTerrainTexture(
   ctx: Ctx2D, terrain: Terrain, hw: number, hh: number, zoom: number,
   col = 0, row = 0,
 ): void {

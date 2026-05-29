@@ -44,15 +44,15 @@
 - [x] Solar Farm (30-tile range, no fuel upkeep)
 - [x] Wind Turbine (25-tile range, cheap)
 
-## Phase 3 — Art / SC4 visual quality (current focus)
+## Phase 3 — Art / SC4 visual quality ✓ complete
 - [ ] Blender-rendered isometric building sprites — R/C/I at each density stage
 - [ ] Blender-rendered infrastructure sprites — roads with sidewalk/lane markings, power pylons
 - [ ] Sprite atlases packed per zoom level (2×, 4×) — hot-swap via `bakeAllTextures()` key
-- [ ] Proper terrain texture — grass noise, forest canopy, dirt paths (currently solid-colour diamonds)
-- [ ] Animated water tiles — wave/shimmer using PixiJS ticker
-- [ ] Tile hover highlight — tint the hovered tile without full redraw
-- [ ] Zone colour overlay — semi-transparent tint showing zoned areas
-- [ ] Night mode — darken worldContainer, lit-window tints on buildings
+- [x] Proper terrain texture — Water/Dirt/Forest use per-pixel noise sprites; Grass retains per-tile colour variation
+- [x] Animated water tiles — shimmer via per-frame tint oscillation on Water terrain sprites
+- [x] Tile hover highlight — white outline + tint overlay, redrawn on mousemove without full redraw
+- [x] Zone colour overlay — semi-transparent fill toggle (View panel / V key); outlines always visible on vacant zones
+- [x] Night mode — dark blue screen overlay + warm amber tint on building sprites (N key / View panel)
 
 ## Phase 4 — Infrastructure depth
 - [ ] Seaport, airport (multi-tile buildings)

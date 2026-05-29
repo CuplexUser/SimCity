@@ -35,38 +35,22 @@ test('renders the city canvas and exposes game state text', async ({ page }) => 
   expect(payload.funds).toBe(20_000)
   expect(payload.camera?.zoom).toBeGreaterThan(0)
 
-  await page.evaluate(() => window.advanceTime?.(1000))
+  // Wait for PixiJS renderer to finish async init (__eng is set in eng.init().then())
+  await page.waitForFunction(() => (window as any).__eng?.renderer != null)
 
-  const readCanvasStats = (node: HTMLCanvasElement): CanvasStats => {
-    const ctx = node.getContext('2d')
-    if (!ctx) return { nonTransparent: 0, uniqueColors: 0, greenPixels: 0 }
+  await page.evaluate(() => (window as any).advanceTime?.(1000))
 
-    const { width, height } = node
-    const image = ctx.getImageData(width * 0.20, height * 0.12, width * 0.60, height * 0.62)
-    const colors = new Set<string>()
-    let nonTransparent = 0
-    let greenPixels = 0
-
-    for (let i = 0; i < image.data.length; i += 64) {
-      const r = image.data[i]
-      const g = image.data[i + 1]
-      const b = image.data[i + 2]
-      const a = image.data[i + 3]
-      if (a === 0) continue
-      nonTransparent++
-      if (g > r * 1.15 && g > b * 1.15) greenPixels++
-      colors.add(`${r >> 3},${g >> 3},${b >> 3}`)
-    }
-
-    return { nonTransparent, uniqueColors: colors.size, greenPixels }
-  }
+  // Read pixel stats via PixiJS extract API (works with WebGL canvas, unlike getContext('2d'))
+  const readStats = (): CanvasStats =>
+    (window as any).__eng?.renderer?.readPixelStats?.()
+    ?? { nonTransparent: 0, uniqueColors: 0, greenPixels: 0 }
 
   await expect.poll(async () => {
-    const stats = await canvas.evaluate(readCanvasStats)
+    const stats = await page.evaluate(readStats)
     return stats.greenPixels
   }).toBeGreaterThan(3_000)
 
-  const canvasStats = await canvas.evaluate(readCanvasStats)
+  const canvasStats = await page.evaluate(readStats)
 
   expect(canvasStats.nonTransparent).toBeGreaterThan(10_000)
   expect(canvasStats.greenPixels).toBeGreaterThan(3_000)

@@ -37,6 +37,11 @@ function App() {
   const [optionsStatus, setOptionsStatus] = useState('')
   const [cityName, setCityName] = useState('New City')
   const [savedCities, setSavedCities] = useState<string[]>([])
+  const [nightMode, setNightMode] = useState(false)
+  const [showZoneOverlay, setShowZoneOverlay] = useState(false)
+
+  const nightModeRef      = useRef(false)
+  const zoneOverlayRef    = useRef(false)
 
   useEffect(() => {
     toolRef.current = activeKey ? keyToTool(activeKey) : null
@@ -46,6 +51,18 @@ function App() {
     speedRef.current = hz
     setSpeed(hz)
     engineRef.current?.setSimSpeed(hz)
+  }
+
+  function handleNightMode(on: boolean) {
+    nightModeRef.current = on
+    setNightMode(on)
+    engineRef.current?.renderer?.setNightMode(on)
+  }
+
+  function handleZoneOverlay(on: boolean) {
+    zoneOverlayRef.current = on
+    setShowZoneOverlay(on)
+    engineRef.current?.renderer?.setZoneOverlay(on)
   }
 
   function resetUiState(yearValue = 2000, populationValue = 0, fundsValue = 20_000) {
@@ -285,6 +302,12 @@ function App() {
       if (minimapDragging) { panToMinimap(e.clientX, e.clientY); return }
       if (panning)  { eng.camera.pan(e.clientX - lastX, e.clientY - lastY); lastX = e.clientX; lastY = e.clientY }
       if (painting) placeTile(e.clientX, e.clientY)
+
+      // Hover highlight
+      const rect = canvas.getBoundingClientRect()
+      const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
+      if (hit) eng.renderer?.setHoverTile(hit.col, hit.row)
+      else     eng.renderer?.clearHoverTile()
     }
     function onMouseUp(e: MouseEvent) {
       if (e.button === 0) { minimapDragging = false; painting = false }
@@ -324,6 +347,8 @@ function App() {
         case 'Escape':       setActiveKey(null);                                         break
         case '+': case '=':  eng.camera.snapZoom(-1, canvas.width / 2, canvas.height / 2); break
         case '-': case '_':  eng.camera.snapZoom( 1, canvas.width / 2, canvas.height / 2); break
+        case 'n': case 'N':  handleNightMode(!nightModeRef.current);                    break
+        case 'v': case 'V':  handleZoneOverlay(!zoneOverlayRef.current);                break
       }
     }
 
@@ -378,6 +403,10 @@ function App() {
         onCityNameChange={setCityName}
         savedCities={savedCities}
         status={optionsStatus}
+        nightMode={nightMode}
+        onNightMode={handleNightMode}
+        showZoneOverlay={showZoneOverlay}
+        onZoneOverlay={handleZoneOverlay}
       />
       <BottomBar year={year} population={pop} funds={funds} />
       <SpeedControl speed={speed} onSpeedChange={handleSpeedChange} />

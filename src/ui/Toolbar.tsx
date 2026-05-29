@@ -40,7 +40,7 @@ export function bulldozeKeyForMode(mode: BulldozeMode): ToolKey {
   return 'dozeNormal'
 }
 
-type CategoryId = 'zones' | 'power' | 'services' | 'roads' | 'doze' | 'options'
+type CategoryId = 'zones' | 'power' | 'services' | 'roads' | 'doze' | 'view' | 'options'
 
 interface ToolBtn { key: ToolKey; label: string; bg: string; fg?: string; title: string }
 
@@ -50,6 +50,7 @@ const CATEGORIES: { id: CategoryId; icon: string; label: string }[] = [
   { id: 'services', icon: '🏛',  label: 'Services' },
   { id: 'roads',    icon: '🛣',  label: 'Roads' },
   { id: 'doze',     icon: '🔨',  label: 'Bulldoze' },
+  { id: 'view',     icon: '👁',   label: 'View' },
   { id: 'options',  icon: '⚙',   label: 'Options' },
 ]
 
@@ -114,12 +115,17 @@ interface Props {
   onCityNameChange: (name: string) => void
   savedCities:  string[]
   status:       string
+  nightMode:       boolean
+  onNightMode:     (on: boolean) => void
+  showZoneOverlay: boolean
+  onZoneOverlay:   (on: boolean) => void
 }
 
 export function Toolbar({
   activeKey, onKeyChange,
   onNewGame, onSaveState, onLoadState, onOptionsOpen,
   cityName, onCityNameChange, savedCities, status,
+  nightMode, onNightMode, showZoneOverlay, onZoneOverlay,
 }: Props) {
   const [openCat, setOpenCat] = useState<CategoryId | null>(null)
 
@@ -197,12 +203,44 @@ export function Toolbar({
     )
   }
 
+  const toggleBtn = (label: string, active: boolean, onChange: (v: boolean) => void, hint: string) => (
+    <button
+      key={label}
+      title={hint}
+      onClick={() => onChange(!active)}
+      style={{
+        width: '100%',
+        height: 36,
+        border: `2px solid ${active ? '#fff' : 'transparent'}`,
+        background: active ? '#334' : '#1a1a2a',
+        color: active ? '#aaeeff' : '#aaa',
+        cursor: 'pointer',
+        borderRadius: 4,
+        fontSize: 13,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '0 10px',
+        textAlign: 'left',
+      }}
+    >
+      <span style={{ fontSize: 14, width: 20, textAlign: 'center', flexShrink: 0 }}>
+        {active ? '✓' : '○'}
+      </span>
+      <span>{label}</span>
+    </button>
+  )
+
   const submenuBtns = () => {
     if (openCat === 'zones')    return ZONE_BTNS.map(toolBtn)
     if (openCat === 'power')    return POWER_BTNS.map(toolBtn)
     if (openCat === 'services') return SERVICE_BTNS.map(toolBtn)
     if (openCat === 'roads')    return ROAD_BTNS.map(toolBtn)
     if (openCat === 'doze')     return DOZE_BTNS.map(toolBtn)
+    if (openCat === 'view') return [
+      toggleBtn('Night Mode',     nightMode,       onNightMode,     'Toggle night mode [N]'),
+      toggleBtn('Zone Overlay',   showZoneOverlay, onZoneOverlay,   'Show zone colour overlay [V]'),
+    ]
     return null
   }
 
