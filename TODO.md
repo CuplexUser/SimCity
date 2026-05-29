@@ -1,6 +1,6 @@
 # WebCity — TODO & Roadmap
 
-## Phase 1 — Core (MVP) status
+## Phase 1 — Core (MVP) ✓ complete
 - [x] Project scaffold (Vite, TypeScript, Preact, JSX)
 - [x] Isometric camera (pan, zoom, world↔screen transforms)
 - [x] World grid (128×128 tiles)
@@ -8,85 +8,92 @@
 - [x] Tile renderer with elevation and painter's-algorithm draw order
 - [x] Zone placement (R/C/I) via click
 - [x] Road overlay placement
-- [x] Bulldoze tool
-- [x] Minimap
+- [x] Bulldoze tool (normal, terrain, zoning modes)
+- [x] Minimap with dirty-flag bake and click/drag navigation
 - [x] Basic UI — Toolbar + BottomBar
 - [x] Sim tick (1 Hz) + year counter
-- [x] Zone growth simulation (density stages 0–8, grows on power + road access within 2 tiles)
-- [x] Power network (BFS flood-fill, 50-tile range from Power Plant)
+- [x] Zone growth simulation (density stages 0–8, grows on power + road access within 2 tiles + water)
+- [x] Power network (BFS flood-fill from power plants)
 - [x] Water network (BFS flood-fill, 20-tile range from Water Tower)
 - [x] Annual budget engine (zone tax revenue, road upkeep expenses)
 - [x] City log (year-end budget summary + population milestones)
-- [x] Road connectivity check (A* in utils/astar.ts; zones require connected road segment ≥2 tiles within 2-tile road access)
+- [x] Road connectivity check (A* in utils/astar.ts)
+- [x] Save/load (IndexedDB via idb-keyval, named city slots, RLE-compressed grid)
+- [x] **Renderer migrated to PixiJS v8 (WebGL)** — target upgraded to SimCity 4 quality
 
-## Phase 2 — Services
-- [x] Police stations (coverage radius → crime reduction)
-- [ ] Fire stations (coverage radius + fire spread probability)
-- [ ] Hospitals, schools, libraries, stadium
-- [ ] Crime overlay
-- [ ] Fire coverage overlay
-- [ ] Land value overlay
-- [ ] Pollution overlay
-- [ ] Data layer panel (toggle 7 overlay types)
+## Phase 2 — Services ✓ complete
+- [x] Police stations (coverage radius → crime reduction, `simulation/crime.ts`)
+- [x] Fire stations (coverage radius + fire spread, `simulation/fire.ts`)
+- [x] Hospitals, schools, libraries (coverage radius, affects zone happiness)
+- [x] Crime simulation (`simulation/crime.ts`)
+- [x] Fire simulation (`simulation/fire.ts`)
+- [x] Land value simulation (`simulation/landValue.ts`)
+- [x] Pollution simulation (`simulation/pollution.ts`)
+- [x] Traffic simulation (`simulation/traffic.ts`)
+- [x] Disaster events (`simulation/disasters.ts`)
+- [x] Data layer panel (`ui/DataLayerPanel.tsx`)
+- [x] Budget panel (`ui/BudgetPanel.tsx`)
+- [x] Advisor panel (`ui/AdvisorPanel.tsx`)
+- [x] Graph panel (`ui/GraphPanel.tsx`)
+- [x] Zone info popup (`ui/ZoneInfoPopup.tsx`)
 
-## Phase 3 — Infrastructure
+## Phase 2.5 — Power plants ✓ complete
+- [x] Coal Power Plant (50-tile range)
+- [x] Gas Turbine (40-tile range)
+- [x] Nuclear Plant (80-tile range, high cost)
+- [x] Solar Farm (30-tile range, no fuel upkeep)
+- [x] Wind Turbine (25-tile range, cheap)
+
+## Phase 3 — Art / SC4 visual quality (current focus)
+- [ ] Blender-rendered isometric building sprites — R/C/I at each density stage
+- [ ] Blender-rendered infrastructure sprites — roads with sidewalk/lane markings, power pylons
+- [ ] Sprite atlases packed per zoom level (2×, 4×) — hot-swap via `bakeAllTextures()` key
+- [ ] Proper terrain texture — grass noise, forest canopy, dirt paths (currently solid-colour diamonds)
+- [ ] Animated water tiles — wave/shimmer using PixiJS ticker
+- [ ] Tile hover highlight — tint the hovered tile without full redraw
+- [ ] Zone colour overlay — semi-transparent tint showing zoned areas
+- [ ] Night mode — darken worldContainer, lit-window tints on buildings
+
+## Phase 4 — Infrastructure depth
 - [ ] Seaport, airport (multi-tile buildings)
 - [ ] Rail (above-ground)
 - [ ] Metro (underground toggle view)
 - [ ] Highways
 - [ ] Bus depots
+- [ ] Road auto-connect — update neighbour road masks on placement
+- [ ] Drag-to-zone rectangular selection
 
-## Phase 4 — Economy depth
+## Phase 5 — Economy depth
 - [ ] Bond system (issue / pay off, 10-year fixed, 5–12% interest)
 - [ ] Deficit → credit rating spiral
-- [ ] Advisor panel (Finance / Transport / Police / Fire / Health / Education)
+- [ ] Full road pathfinding for traffic (A* on road graph replacing convolution)
+- [ ] Water pipes / pump stations — separate pipe overlay
+- [ ] Budget ordinances — per-ordinance toggles affecting revenue/expenses
+- [ ] Park / plaza building types — boost land value in radius
 - [ ] Population history graph (canvas-rendered)
-- [ ] Budget history chart
 - [ ] City rating score
 
-## Phase 5 — Polish & disasters
+## Phase 6 — Polish
 - [ ] Earthquake (random tile destruction)
-- [ ] Fire spread simulation
 - [ ] Monster attack (tile-pathing walker)
 - [ ] Tornado
-- [ ] Day/night palette shift
-- [ ] Animated water tiles
-- [ ] Tree planting + wilderness decay over time
+- [ ] Sound effects — ambient city hum, construction, disaster alert
+- [ ] Touch / mobile support — pinch-to-zoom, two-finger pan
+- [ ] Screenshot export — save canvas as PNG
+- [ ] Undo/redo (Ctrl+Z) — command history for tile placements
 
 ## Technical debt / improvements
-- [x] **Sprites**: Pre-baked terrain diamonds now use SC2000-style dithered procedural textures instead of solid colors.
-- [ ] **Draw order**: Diagonal-sweep implemented. Tall buildings may need depth-sort
-      by (row + col + buildingHeight) once multi-tile buildings are added.
-- [x] **Minimap redraw**: Dirty-flag implemented — only rebakes when world changes.
-- [ ] **Viewport indicator**: Show camera viewport rect on minimap.
-- [x] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power/plant, W = water tower, L = power line, B = bulldoze, Escape = deselect, +/- = zoom.
-- [x] **Speed control UI**: Pause / 1× / 2× / 3× (SpeedControl.tsx).
-- [ ] **Save/load**: IndexedDB via idb-keyval; RLE-compress grid; multiple slots + autosave.
-- [x] **Tests**: Vitest — 92 tests across core, rendering, simulation, and utility modules.
+- [x] **Sprites**: Pre-baked via OffscreenCanvas → PIXI.Texture at startup (PixiJS migration)
+- [x] **Draw order**: Single sortable container with `zIndex = (col+row)*3 + layer`
+- [x] **Minimap redraw**: Dirty-flag implemented — only rebakes when world changes
+- [x] **Keyboard shortcuts**: 1/2/3 = R/C/I zone, R = road, P = power plant, W = water tower, L = power line, B = bulldoze, Escape = deselect, +/- = zoom
+- [x] **Speed control UI**: Pause / 1× / 3× / 10×
+- [x] **Save/load**: IndexedDB via idb-keyval; RLE-compress grid; named city slots
+- [x] **Tests**: Vitest — unit tests across core, rendering, simulation, and utility modules
+- [ ] **Viewport indicator**: Show camera viewport rect on minimap
+- [ ] **Draw order for tall buildings**: Depth-sort by (row + col + buildingHeight) once multi-tile buildings are added
 
-## Utilities still to implement
-- [x] `src/utils/astar.ts` — A* for road connectivity + `isRoadConnected` BFS
-- [x] `src/utils/floodfill.ts` — BFS for power/water networks
-- [x] `src/core/saveLoad.ts` — IndexedDB serialization
-- [x] `src/simulation/zones.ts` — RCI demand + density
-- [x] `src/simulation/economy.ts` — Tax engine (bonds still pending)
-- [x] `src/simulation/power.ts` — Power network propagation
-- [x] `src/simulation/water.ts` — Water network propagation
-- [x] `src/simulation/traffic.ts` — Road load (density convolution)
-- [x] `src/simulation/landValue.ts` — Distance-decay desirability
-- [x] `src/simulation/pollution.ts` — Industry/traffic diffusion grid
-- [x] `src/simulation/crime.ts` — Police coverage model
-- [x] `src/simulation/fire.ts` — Fire coverage + spread
-- [x] `src/simulation/disasters.ts` — Disaster event triggers
-- [x] `src/data/buildings.ts` — Building costs, upkeep, capacity
-- [x] `src/ui/BudgetPanel.tsx`
-- [x] `src/ui/DataLayerPanel.tsx`
-- [x] `src/ui/AdvisorPanel.tsx`
-- [x] `src/ui/GraphPanel.tsx`
-- [x] `src/ui/ZoneInfoPopup.tsx`
-- [x] `src/ui/SpeedControl.tsx`
-
-## Hosting decisions pending
+## Hosting
 - Custom domain: `webcity.cuplex.se`
-- Cloud saves / multiplayer: SQLite or as a binary download.
-- Linux VPS deploy
+- Deploy: `pnpm build` → Cloudflare Pages or `rsync dist/` to Linux VPS
+- Cloud saves / multiplayer: SQLite or binary download

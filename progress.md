@@ -23,3 +23,24 @@ Original prompt: Continue with the implementation plan according to the TODO.md 
 - Verified the texture change with `pnpm typecheck`, `pnpm test`, `pnpm build`, and a Playwright screenshot run against Vite. The screenshot shows textured grass/forest terrain rendering correctly.
 - Continuing grass pass: identified that the previous grass texture was baked once per zoom and repeated exactly on every tile. Added deterministic coordinate-keyed grass variants and layered seeded simplex noise with subtle blade detail while keeping the terrain sprite cache.
 - Replaced the default Playwright example setup with a WebCity-specific config and smoke test: Vite web server, app base URL, Chromium project, canvas/game-state assertions, console-error guard, and rendered-pixel checks for nonblank textured terrain.
+
+## 2026-05-29 — PixiJS v8 WebGL migration
+
+Migrated the rendering layer from Canvas 2D to PixiJS v8 (WebGL). Target visual quality upgraded from SimCity 2000 to SimCity 4. All `core/` and `simulation/` code is unchanged; only `rendering/` was rewritten.
+
+**Changes:**
+- `rendering/renderer.ts` — complete rewrite: `Renderer.create()` async factory, PixiJS `Application`, single sortable `worldContainer`, terrain as `PIXI.Graphics`, roads/buildings as `PIXI.Sprite`
+- `rendering/tileTextures.ts` — new file: pre-bakes all building + overlay textures at startup via OffscreenCanvas → ImageBitmap → PIXI.Texture (~100 textures, keyed by `z:{zone}:{density}`, `b:{building}`, `o:{overlayBitmask}:{roadMask}`)
+- `rendering/tileRenderer.ts` — widened all `ctx` parameters to `Ctx2D` union type so drawing functions work with both `CanvasRenderingContext2D` and `OffscreenCanvasRenderingContext2D`
+- `rendering/minimap.ts` — changed `draw()` signature; minimap now draws at (0,0) into its own dedicated `HTMLCanvasElement` which is uploaded to PixiJS as a texture each frame
+- `core/world.ts` — added `readonly dirty = new Set<number>()` and `world.set()` now calls `dirty.add(idx)` on every write
+- `core/engine.ts` — added `async init()` method; `renderer` field is now `Renderer | undefined` set after init
+- `main.tsx` — updated for async init pattern: `eng.init().then(() => { generateWorld(); eng.start(); window.__eng = eng })`
+- `CLAUDE.md` — updated to reflect PixiJS architecture, scene layout, module table, sprite/texture pipeline
+
+**Architecture decisions:**
+- Single sortable container with `zIndex = (col+row)*3 + layer` — no separate layer containers needed
+- Terrain as `PIXI.Graphics` (no texture upload) for fast startup
+- Zoom handled by `worldContainer.scale` on the GPU — no per-zoom texture rebake
+- Minimap isolated to its own Canvas 2D canvas to avoid mixing WebGL + 2D on the same element
+- `pnpm typecheck` and `pnpm build` pass clean

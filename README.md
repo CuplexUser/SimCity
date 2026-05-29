@@ -1,6 +1,6 @@
 # WebCity
 
-A browser-based SimCity 2000-style isometric city builder, built with TypeScript, Vite, Preact, and HTML5 Canvas 2D.
+A browser-based SimCity 4-style isometric city builder, built with TypeScript, Vite, Preact, and PixiJS v8 (WebGL).
 
 ## Development
 
@@ -8,7 +8,7 @@ A browser-based SimCity 2000-style isometric city builder, built with TypeScript
 pnpm install
 pnpm dev        # Vite HMR dev server → http://localhost:5173
 pnpm typecheck  # tsc --noEmit
-pnpm test       # Vitest (58 tests)
+pnpm test       # Vitest unit tests
 pnpm test:watch # Vitest in watch mode
 ```
 
@@ -43,8 +43,9 @@ nginx serves `dist/` as a static SPA with `/index.html` fallback. SSL via Certbo
 | `3` | Industrial zone |
 | `R` | Road |
 | `L` | Power line |
-| `P` | Power Plant |
-| `W` | Water Tower |
+| `P` | Power plant (coal) |
+| `O` | Police station |
+| `W` | Water tower |
 | `B` | Bulldoze |
 | `Escape` | Deselect tool |
 | `+` / `-` | Zoom in / out |
@@ -53,24 +54,50 @@ nginx serves `dist/` as a static SPA with `/index.html` fallback. SSL via Certbo
 
 ## What's implemented
 
-### Rendering
+### Rendering (PixiJS v8 WebGL)
 - Isometric camera with pan, zoom, and elevation-aware click hit-testing
-- Painter's-algorithm diagonal sweep with two-pass batched GPU flush (~15 draw calls/frame)
-- Pre-baked terrain sprites via `OffscreenCanvas` + `ImageBitmap` cache (one set per zoom level)
+- Single sortable `worldContainer`; painter's-algorithm via `zIndex = (col+row)*3 + layer`
+- Terrain: `PIXI.Graphics` solid-colour diamonds with per-tile hash colour variation
+- Roads and buildings: `PIXI.Sprite` backed by textures pre-baked at startup in `tileTextures.ts` (~100 textures via OffscreenCanvas → ImageBitmap → PIXI.Texture)
+- Dirty-tile tracking: `world.dirty: Set<number>` drained each frame — only changed tiles rebuild
 - Minimap with dirty-flag bake, live viewport indicator, and click/drag navigation
+- Minimap rendered into a dedicated `HTMLCanvasElement` (Canvas 2D) and uploaded as PixiJS texture each frame
 
 ### Simulation (1 Hz tick, 12 ticks = 1 year)
-- Zone growth (R/C/I) — 9 density stages; requires power + connected road access (≥ 2-tile segment)
-- Power network — BFS flood-fill, 50-tile range from Power Plant; crosses water via Power Line overlay
+- Zone growth (R/C/I) — 9 density stages; requires power + road access within 2 tiles + water
+- Power network — BFS flood-fill from power plants (coal, gas turbine, nuclear, solar, wind)
 - Water network — BFS flood-fill, 20-tile range from Water Tower
-- Annual budget — zone tax revenue, road upkeep, building upkeep; deficit warning
-- City log — year-end budget summary, population milestones
+- Crime — coverage radius from Police Stations; affects zone happiness
+- Fire — coverage radius from Fire Stations; fire spread simulation
+- Traffic — approximate load via zone-density convolution
+- Land value — distance-decay from parks, services, water bodies
+- Pollution — diffusion grid from industry tiles and traffic load
+- Disasters — random disaster event triggers
+- Annual budget — zone tax revenue, building upkeep, deficit warning; city log entry each year
+
+### Buildings
+| Building | Power/coverage range |
+|---|---|
+| Coal Power Plant | 50 tiles |
+| Gas Turbine | 40 tiles |
+| Nuclear Plant | 80 tiles |
+| Solar Farm | 30 tiles |
+| Wind Turbine | 25 tiles |
+| Water Tower | 20 tiles |
+| Police Station | 25 tiles |
+| Fire Station | 20 tiles |
+| Hospital | 20 tiles |
+| School | 15 tiles |
+| Library | 10 tiles |
 
 ### Tools & UI
-- Toolbar: zone (R/C/I), Power Plant, Water Tower, Road, Power Line, Bulldoze
+- SC4-style toolbar: category rail + flyout panels (zones, infrastructure, services, power, bulldoze, options)
 - Placement costs deducted from funds on each tile placed
-- Speed control: ⏸ / 1× / 2× / 3×
+- Speed control: ⏸ / 1× / 3× / 10×
 - Bottom bar: year, population, funds
+- City log: year-end budget summary, population milestones, disaster alerts
+- Options panel: New City, Save City, Load City (named saves via IndexedDB)
+- Budget, data layer, advisor, graph, and zone info panels
 
 ### Pathfinding utilities
 - `utils/floodfill.ts` — typed-array BFS (power, water networks)
@@ -81,26 +108,36 @@ nginx serves `dist/` as a static SPA with `/index.html` fallback. SSL via Certbo
 ## Architecture
 
 Two independent loops:
-- **Render** — `requestAnimationFrame` at ~60 fps
-- **Sim tick** — `setInterval` at 1–4 Hz (speed-controlled); 12 ticks = 1 game year
+- **Render** — `requestAnimationFrame` at ~60 fps; calls `renderer.draw()`
+- **Sim tick** — `setInterval` at 1–10 Hz (speed-controlled); 12 ticks = 1 game year
+
+Engine init is async: `new Engine(canvas)` is sync, `await eng.init()` creates the PixiJS app, then `eng.start()` begins the RAF loop.
 
 Coordinate system: `(col, row, elevation)` → `isoCamera.worldToScreen()` → screen `(px, py)`.  
 Tile size at 1×: 64 × 32 px. Each elevation level = +8 px vertical offset.
 
 | Module | Role |
 |---|---|
-| `core/engine.ts` | Game loop, speed control |
-| `core/world.ts` | 128 × 128 tile grid |
+| `core/engine.ts` | Game loop, speed control; `async init()` creates PixiJS renderer |
+| `core/world.ts` | 128 × 128 tile grid; `world.dirty` Set tracks changed tiles |
 | `core/tile.ts` | Tile type enums, ActiveTool |
 | `core/events.ts` | Typed event bus |
 | `rendering/isoCamera.ts` | World ↔ screen transforms, pan, snap-zoom |
-| `rendering/tileRenderer.ts` | Two-pass batched tile renderer |
-| `rendering/minimap.ts` | Minimap bake + viewport indicator |
+| `rendering/renderer.ts` | PixiJS Application, single sortable worldContainer, dirty-tile processing |
+| `rendering/tileTextures.ts` | Pre-bakes all building + overlay textures at startup: OffscreenCanvas → PIXI.Texture |
+| `rendering/tileRenderer.ts` | Canvas 2D drawing primitives — called by tileTextures.ts |
+| `rendering/minimap.ts` | Canvas 2D minimap; draws at (0,0) into a dedicated HTMLCanvasElement |
 | `simulation/simManager.ts` | Tick coordination |
 | `simulation/zones.ts` | RCI demand + density growth |
 | `simulation/power.ts` | Power BFS |
 | `simulation/water.ts` | Water BFS |
 | `simulation/economy.ts` | Annual budget |
+| `simulation/crime.ts` | Police coverage model |
+| `simulation/fire.ts` | Fire coverage + spread |
+| `simulation/traffic.ts` | Road load (density convolution) |
+| `simulation/landValue.ts` | Distance-decay desirability |
+| `simulation/pollution.ts` | Industry/traffic diffusion grid |
+| `simulation/disasters.ts` | Disaster event triggers |
 | `data/buildings.ts` | Building costs and upkeep |
 | `data/worldGen.ts` | Simplex-noise terrain generation |
 
@@ -108,6 +145,6 @@ Tile size at 1×: 64 × 32 px. Each elevation level = +8 px vertical offset.
 
 ## Roadmap
 
-See `TODO.md` for the full feature roadmap (Phases 2–5 and remaining utilities).
+See `TODO.md` for the full feature roadmap.
 
-Next up: Phase 2 — Services (police, fire, hospitals, schools) and data-layer overlays.
+Visual goal: SimCity 4 aesthetic — the renderer is capable of Blender-rendered sprite atlases; procedural OffscreenCanvas sprites are the current fallback until real art exists.
