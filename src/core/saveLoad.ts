@@ -3,7 +3,7 @@ import { World } from './world'
 import { defaultTile, type Tile } from './tile'
 
 export interface SaveGame {
-  version: 1
+  version: 1 | 2
   cols: number
   rows: number
   runs: TileRun[]
@@ -44,12 +44,13 @@ export function serializeWorld(world: World): SaveGame {
   })
 
   if (prev) runs.push({ count, tile: prev })
-  return { version: 1, cols: world.cols, rows: world.rows, runs }
+  return { version: 2, cols: world.cols, rows: world.rows, runs }
 }
 
 export function deserializeWorld(save: SaveGame): World {
   const world = new World()
-  if (save.version !== 1 || save.cols !== world.cols || save.rows !== world.rows) {
+  // v1 saves predate footprint fields; the defaultTile() spread below backfills them.
+  if ((save.version !== 1 && save.version !== 2) || save.cols !== world.cols || save.rows !== world.rows) {
     throw new Error('Unsupported save format')
   }
 

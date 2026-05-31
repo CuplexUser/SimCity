@@ -17,14 +17,23 @@
 import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js'
 import { type World } from '../core/world'
 import { type IsoCamera, TILE_W, TILE_H, ELEV_H } from './isoCamera'
-import { Terrain, Zone, Overlay, Building } from '../core/tile'
+import { Terrain, Zone, Overlay, Building, type Tile } from '../core/tile'
+import { footprintTiles } from '../core/footprint'
 import { Minimap, MINI_W, MINI_H, MINI_MARGIN_R, MINI_MARGIN_B } from './minimap'
 import {
   bakeAllTextures, type TextureCache,
   getBuildingKey, getOverlayKey,
   BLDG_CANVAS_H, BLDG_APEX_Y,
 } from './tileTextures'
+import { loadSpriteAtlas, type LoadedAtlas, type SpriteMeta } from './spriteAtlas'
 import { drawTerrainTexture } from './sprites'
+
+// Deterministic per-tile hash for picking a building variant from the atlas.
+function variantHash(col: number, row: number): number {
+  let h = Math.imul(col + 1, 668265263) ^ Math.imul(row + 1, 2246822519)
+  h = Math.imul(h ^ (h >>> 13), 3266489917)
+  return (h ^ (h >>> 16)) >>> 0
+}
 
 // ── Tile layout constants (base zoom = 1) ────────────────────────────────────
 const BASE_HW = TILE_W / 2   // 32
@@ -87,12 +96,16 @@ export class Renderer {
 
   // Shared texture cache for building/overlay textures (~100 textures)
   private texCache!: TextureCache
+  // Loaded sprite atlas (empty when no manifest present → pure procedural fallback)
+  private atlas: LoadedAtlas = { meta: new Map(), variants: new Map() }
   // Shared terrain textures: one per non-Grass terrain type (3 total)
   private terrainTexCache = new Map<Terrain, Texture>()
 
   // Fixed-zIndex overlay layers inside worldContainer
   private zoneLayerGfx!: Graphics   // zone outlines (+ fills when overlay enabled)
   private hoverGfx!: Graphics       // hover highlight
+  private _hoverW = 1               // footprint width  of the hovered placement
+  private _hoverH = 1               // footprint height of the hovered placement
 
   // Water animation: references to Water terrain sprites
   private waterSpriteList: Sprite[] = []
@@ -159,8 +172,11 @@ export class Renderer {
     this.worldContainer.sortableChildren = true
     this.app.stage.addChild(this.worldContainer)
 
-    // Pre-bake shared building + overlay textures (~100 total)
+    // Pre-bake shared building + overlay textures (~100 total) — procedural fallback
     this.texCache = bakeAllTextures()
+
+    // Load the building sprite atlas if present (empty map → pure procedural fallback)
+    this.atlas = await loadSpriteAtlas()
 
     // Pre-bake shared terrain textures for non-Grass types
     for (const t of [Terrain.Water, Terrain.Dirt, Terrain.Forest]) {
@@ -235,7 +251,15 @@ export class Renderer {
         overlayIdxs.add(idx)
         const col = idx % world.cols
         const row = Math.floor(idx / world.cols)
-        if (world.get(col, row).overlay & Overlay.Road) {
+        // A changed tile that belongs to a multi-tile structure must rebuild the
+        // whole plot (origin sprite + covered tiles) so it appears/clears as one.
+        const tile = world.get(col, row)
+        if (tile.footW > 1 || tile.footH > 1 || tile.rootCol !== -1 || tile.rootRow !== -1) {
+          for (const [fc, fr] of footprintTiles(world, col, row)) {
+            dirtyIdxs.add(fr * world.cols + fc)
+          }
+        }
+        if (tile.overlay & Overlay.Road) {
           for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]] as const) {
             const nc = col + dc, nr = row + dr
             if (world.inBounds(nc, nr)) overlayIdxs.add(nr * world.cols + nc)
@@ -312,10 +336,12 @@ export class Renderer {
     return { nonTransparent, uniqueColors: colors.size, greenPixels }
   }
 
-  setHoverTile(col: number, row: number): void {
+  setHoverTile(col: number, row: number, w = 1, h = 1): void {
     const idx = this.world.inBounds(col, row) ? this._idx(col, row) : -1
-    if (idx !== this._hoverIdx) {
+    if (idx !== this._hoverIdx || w !== this._hoverW || h !== this._hoverH) {
       this._hoverIdx = idx
+      this._hoverW   = Math.max(1, w)
+      this._hoverH   = Math.max(1, h)
       this._drawHoverHighlight()
     }
   }
@@ -332,6 +358,25 @@ export class Renderer {
     this._nightMode = on
     this._resizeNightOverlay()
     this._applyNightTintToBuildings(on)
+  }
+
+  /**
+   * Square lot sizes (per zone) that have building art in the loaded atlas.
+   * Empty when no zone art is present → simulation keeps zones as plain 1×1 lots.
+   * Keyed by Zone enum value.
+   */
+  zoneLotSizes(): Map<number, number[]> {
+    const out = new Map<number, Set<number>>()
+    for (const [key, meta] of this.atlas.meta) {
+      if (!key.startsWith('z:')) continue
+      if (meta.footW !== meta.footH) continue // only square lots are claimable
+      const zone = Number(key.split(':')[1])
+      if (!out.has(zone)) out.set(zone, new Set())
+      out.get(zone)!.add(meta.footW)
+    }
+    const result = new Map<number, number[]>()
+    for (const [zone, sizes] of out) result.set(zone, [...sizes].sort((a, b) => b - a))
+    return result
   }
 
   setZoneOverlay(on: boolean): void {
@@ -430,22 +475,59 @@ export class Renderer {
 
   // ── Building sprites ─────────────────────────────────────────────────────
 
+  /**
+   * Resolve an atlas sprite for a footprint-origin tile, or null to fall back to
+   * the procedural baker. Zone buildings pick a deterministic variant per lot.
+   */
+  private _resolveSprite(tile: Tile, col: number, row: number): SpriteMeta | null {
+    if (tile.density > 0) {
+      const bucket = tile.density <= 2 ? 0 : tile.density <= 5 ? 1 : 2
+      const group  = `z:${tile.zone}:${bucket}`
+      const variants = this.atlas.variants.get(group)
+      if (variants && variants.length > 0) {
+        // Prefer variants whose art footprint matches this lot's footprint.
+        const fit = variants.filter((k) => {
+          const m = this.atlas.meta.get(k)
+          return m && m.footW === tile.footW && m.footH === tile.footH
+        })
+        const pool = fit.length > 0 ? fit : variants
+        const key = pool[variantHash(col, row) % pool.length]
+        return this.atlas.meta.get(key) ?? null
+      }
+      return null
+    }
+    return this.atlas.meta.get(`b:${tile.building}`) ?? null
+  }
+
   private _rebuildBuilding(col: number, row: number): void {
     const idx = this._idx(col, row)
     const old = this.buildingSprites[idx]
     if (old) { this.worldContainer.removeChild(old); old.destroy({ texture: false }); this.buildingSprites[idx] = null }
 
     const tile = this.world.get(col, row)
+    // Only the footprint origin draws a sprite; covered (non-origin) tiles draw none.
+    if (tile.rootCol !== -1 || tile.rootRow !== -1) return
     if (tile.density === 0 && tile.building === Building.None) return
 
-    const tex = this.texCache.get(getBuildingKey(tile))
-    if (!tex) return
+    const meta = this._resolveSprite(tile, col, row)
+    let sprite: Sprite
+    if (meta) {
+      sprite = new Sprite(meta.texture)
+      sprite.anchor.set(meta.anchorX / meta.frameW, meta.anchorY / meta.frameH)
+      sprite.scale.set(meta.scale)
+    } else {
+      const tex = this.texCache.get(getBuildingKey(tile))
+      if (!tex) return
+      sprite = new Sprite(tex)
+      sprite.anchor.set(0.5, BLDG_APEX_Y / BLDG_CANVAS_H)
+    }
 
-    const sprite = new Sprite(tex)
-    sprite.anchor.set(0.5, BLDG_APEX_Y / BLDG_CANVAS_H)
-    sprite.x      = (col - row) * BASE_HW
-    sprite.y      = (col + row) * BASE_HH - tile.elevation * BASE_EH
-    sprite.zIndex = (col + row) * 3 + 2
+    sprite.x = (col - row) * BASE_HW
+    sprite.y = (col + row) * BASE_HH - tile.elevation * BASE_EH
+    // Sort by the plot's front (south-east) tile so tall multi-tile buildings occlude
+    // anything behind them and tuck behind anything in front.
+    const frontD = (col + tile.footW - 1) + (row + tile.footH - 1)
+    sprite.zIndex = frontD * 3 + 2
     if (this._nightMode) sprite.tint = 0xffcc77
 
     this.buildingSprites[idx] = sprite
@@ -526,14 +608,21 @@ export class Renderer {
 
     const col  = this._hoverIdx % this.world.cols
     const row  = Math.floor(this._hoverIdx / this.world.cols)
-    const tile = this.world.get(col, row)
-    const x    = (col - row) * BASE_HW
-    const y    = (col + row) * BASE_HH - tile.elevation * BASE_EH
     const hw   = BASE_HW, hh = BASE_HH
 
-    const pts = [x, y, x + hw, y + hh, x, y + hh * 2, x - hw, y + hh]
-    g.poly(pts).fill({ color: 0xffffff, alpha: 0.10 })
-    g.poly(pts).stroke({ color: 0xffffff, width: 1.8, alpha: 0.60 })
+    // Highlight every tile of the hovered footprint (1×1 for most tools).
+    for (let dr = 0; dr < this._hoverH; dr++) {
+      for (let dc = 0; dc < this._hoverW; dc++) {
+        const c = col + dc, r = row + dr
+        if (!this.world.inBounds(c, r)) continue
+        const tile = this.world.get(c, r)
+        const x = (c - r) * hw
+        const y = (c + r) * hh - tile.elevation * BASE_EH
+        const pts = [x, y, x + hw, y + hh, x, y + hh * 2, x - hw, y + hh]
+        g.poly(pts).fill({ color: 0xffffff, alpha: 0.10 })
+        g.poly(pts).stroke({ color: 0xffffff, width: 1.8, alpha: 0.60 })
+      }
+    }
   }
 
   // ── Night mode ────────────────────────────────────────────────────────────

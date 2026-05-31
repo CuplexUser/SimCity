@@ -21,6 +21,28 @@ export const BUILDING_DEFS: Record<Building, BuildingDef> = {
   [Building.WindTurbine]:   { cost: 1_200,   upkeep: 25,  label: 'Wind Turbine' },
 }
 
+// Plot footprint (width × height in tiles) for plopped buildings. Larger civic
+// and power structures occupy multi-tile plots like SimCity 4; the placement
+// code checks the whole plot is clear and renders one sprite over it.
+export const BUILDING_FOOTPRINT: Record<Building, [number, number]> = {
+  [Building.None]:          [1, 1],
+  [Building.PowerPlant]:    [4, 4],
+  [Building.Nuclear]:       [4, 4],
+  [Building.GasTurbine]:    [3, 3],
+  [Building.SolarFarm]:     [3, 3],
+  [Building.WindTurbine]:   [1, 1],
+  [Building.WaterTower]:    [2, 2],
+  [Building.PoliceStation]: [3, 3],
+  [Building.FireStation]:   [3, 3],
+  [Building.Hospital]:      [3, 3],
+  [Building.School]:        [3, 3],
+  [Building.Library]:       [2, 2],
+}
+
+export function buildingFootprint(b: Building): [number, number] {
+  return BUILDING_FOOTPRINT[b] ?? [1, 1]
+}
+
 // Per-tile placement costs for zones and overlays
 export const ZONE_COST: Record<Zone, number> = {
   [Zone.None]:        0,

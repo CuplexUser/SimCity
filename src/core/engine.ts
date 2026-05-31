@@ -29,6 +29,12 @@ export class Engine {
   /** Async step: creates the PixiJS renderer.  Must be called before start(). */
   async init(): Promise<void> {
     this.renderer = await Renderer.create(this.canvas, this.world, this.camera)
+
+    // Enable multi-tile zone lots only for sizes that have building art loaded.
+    const sizes = this.renderer.zoneLotSizes()
+    if (sizes.size > 0) {
+      this.sim.setLotSizer((zone) => sizes.get(zone) ?? [1])
+    }
   }
 
   start(): void {

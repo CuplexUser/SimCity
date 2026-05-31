@@ -47,6 +47,16 @@ export interface Tile {
   policed:       boolean  // within range of a Police Station
   fireProtected: boolean  // within range of a Fire Station
   burning:       boolean  // active fire/disaster state
+
+  // ── Multi-tile footprint ──────────────────────────────────────────────────
+  // A structure (plopped building or grown lot) can span an footW×footH plot
+  // rooted at one "origin" tile (its NW/top corner). Only the origin carries the
+  // building/density + footprint size; covered tiles point back to the origin via
+  // rootCol/rootRow and are otherwise empty so the sim ignores them.
+  footW:    number   // plot width  in tiles — meaningful on the origin tile (default 1)
+  footH:    number   // plot height in tiles — meaningful on the origin tile (default 1)
+  rootCol:  number   // origin col of the structure covering this tile; -1 = none/self
+  rootRow:  number   // origin row; -1 = none/self
 }
 
 export function defaultTile(): Tile {
@@ -62,6 +72,10 @@ export function defaultTile(): Tile {
     policed:       false,
     fireProtected: false,
     burning:       false,
+    footW:         1,
+    footH:         1,
+    rootCol:       -1,
+    rootRow:       -1,
   }
 }
 

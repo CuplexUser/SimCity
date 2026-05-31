@@ -11,7 +11,8 @@ import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolb
 import { BottomBar } from './ui/BottomBar'
 import { CityLog } from './ui/CityLog'
 import { SpeedControl } from './ui/SpeedControl'
-import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST } from './data/buildings'
+import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST, buildingFootprint } from './data/buildings'
+import { canPlaceFootprint, placeFootprint } from './core/footprint'
 import { Minimap } from './rendering/minimap'
 
 declare global {
@@ -227,13 +228,14 @@ function App() {
           break
         }
         case 'building': {
-          if (t.building !== Building.None) return
-          if (t.density > 0)               return
-          if (t.terrain === Terrain.Water) return
-          if (t.building === tool.building) return
+          const [fw, fh] = buildingFootprint(tool.building)
+          // The clicked tile is the plot's NW/origin corner; the whole plot must be clear.
+          if (!canPlaceFootprint(eng.world, col, row, fw, fh)) return
           const def = BUILDING_DEFS[tool.building]
           if (!spendFunds(def.cost)) return
-          eng.world.set(col, row, { building: tool.building, zone: Zone.None, density: 0 })
+          placeFootprint(eng.world, col, row, fw, fh, {
+            building: tool.building, zone: Zone.None, density: 0,
+          })
           break
         }
         case 'road': {
@@ -313,11 +315,16 @@ function App() {
       if (panning)  { eng.camera.pan(e.clientX - lastX, e.clientY - lastY); lastX = e.clientX; lastY = e.clientY }
       if (painting) placeTile(e.clientX, e.clientY)
 
-      // Hover highlight
+      // Hover highlight — show the full footprint when a building tool is active
       const rect = canvas.getBoundingClientRect()
       const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
-      if (hit) eng.renderer?.setHoverTile(hit.col, hit.row)
-      else     eng.renderer?.clearHoverTile()
+      if (hit) {
+        const tool = toolRef.current
+        const [hw, hh] = tool?.kind === 'building' ? buildingFootprint(tool.building) : [1, 1]
+        eng.renderer?.setHoverTile(hit.col, hit.row, hw, hh)
+      } else {
+        eng.renderer?.clearHoverTile()
+      }
     }
     function onMouseUp(e: MouseEvent) {
       if (e.button === 0) { minimapDragging = false; painting = false; terrainLevelTarget = undefined }

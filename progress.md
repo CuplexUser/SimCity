@@ -1,5 +1,39 @@
 Original prompt: Continue with the implementation plan according to the TODO.md file
 
+## 2026-05-31 — Building art from resource files + multi-tile footprints
+
+Major visual-upgrade slice: buildings now render from a **sprite atlas resource file** instead of being hand-drawn at runtime, and occupy **multi-tile footprints** like SimCity 4. Procedural drawing remains as a graceful fallback for any key without art (roads/power stay procedural).
+
+**Layer 1 — footprint data model**
+- `core/tile.ts`: added `footW/footH/rootCol/rootRow` (default 1×1 self-rooted) + defaults.
+- `core/footprint.ts` (new): `canPlaceFootprint`, `placeFootprint`, `clearFootprint`, `findRoot`, `footprintTiles`, `isFootprintOrigin`, `isCovered`.
+- `core/bulldoze.ts`: demolishes the whole plot for multi-tile structures (grown lots keep zoning to regrow); single-tile semantics unchanged.
+- `core/saveLoad.ts`: bumped save version → 2, accepts v1/v2 (footprint fields backfilled via `defaultTile()`).
+
+**Layer 2 — asset manifest + loader**
+- `rendering/spriteManifest.ts` (new): manifest types (frame, footprint, anchor, scale).
+- `rendering/spriteAtlas.ts` (new): `loadSpriteAtlas()` slices `public/sprites/atlas.png` into sub-textures via `manifest.json`; returns empty (pure fallback) when absent.
+
+**Layer 3 — renderer + placement + zone growth**
+- `rendering/renderer.ts`: loads atlas in `_init`; `_rebuildBuilding` draws one sprite at the footprint origin (atlas `SpriteMeta` anchor/scale, or procedural fallback), z-ordered by the plot's front tile; covered tiles draw nothing; footprint-aware dirty expansion; deterministic per-lot variant pick; hover highlight shows the whole footprint; `zoneLotSizes()` exposes art-backed lot sizes.
+- `data/buildings.ts`: `BUILDING_FOOTPRINT` table (Coal/Nuclear 4×4, Police/Fire/Hospital/School 3×3, etc.).
+- `main.tsx`: plop placement uses `canPlaceFootprint`/`placeFootprint` (cost once); hover passes the active building's footprint.
+- `simulation/zones.ts`: optional `LotSizer` forms multi-tile lots from contiguous same-zone vacant tiles (only sizes with art); population scales by lot area; origin-only counting. Without a `LotSizer` (no atlas), behaviour is identical to before.
+- `simulation/simManager.ts` + `core/engine.ts`: wire `Renderer.zoneLotSizes()` → `SimManager.setLotSizer()` after init.
+
+**Layer 4 — asset pipeline (`tools/`)**
+- `tools/genStarterAtlas.mjs` (`pnpm gen:atlas`): draws the bundled starter atlas with `@napi-rs/canvas` (no external assets) — 29 multi-tile sprites → `public/sprites/`.
+- `tools/buildAtlas.mjs` (`pnpm build:atlas`): packs custom PNGs from `tools/assets-src/` via `tools/spriteMap.json`.
+- `tools/blender/render_isos.py` + `tools/blender/README.md`: headless Blender renderer at the in-game 2:1 dimetric angle (1 unit = 1 tile, SW sun, auto footprint/anchor).
+- `tools/README.md`: full pipeline + geometry contract (tile = 64×32 px; anchor = source pixel on the plot's north apex).
+- `@napi-rs/canvas` added as a devDependency (content tooling only; not bundled).
+
+**Verification**
+- `pnpm typecheck`, `pnpm build`, and `pnpm test` (100 tests, incl. new `core/footprint.test.ts` and updated `zones.test.ts`/`saveLoad.test.ts`) all green.
+- Playwright E2E: built a road-served R/C/I grid + plopped power plant, advanced the sim — confirmed multi-tile atlas towers, houses with hip roofs/trees, civic buildings (police/fire/library), correct anchoring + z-order over procedural roads, and **zero console errors**.
+
+**Deliberate scope note:** the starter atlas is generated art that proves the pipeline and gives an immediate upgrade; it is swappable key-for-key by Blender renders or a CC0 pack with no code change. Zone-lot multi-tile formation is gated on available art sizes, so deleting `public/sprites/` returns the game to the exact previous procedural look.
+
 ## 2026-05-18
 
 - Started Phase 2 Services with Police Stations, since `Tile` and `Building` already include police-specific fields.

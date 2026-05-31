@@ -1,0 +1,12 @@
+{
+  "_comment": "Maps source PNGs in tools/assets-src/ to atlas keys for buildAtlas.mjs. Keys: z:{zone}:{bucket}:{variant} (zone 1=R 2=C 3=I, bucket 0=low 1=mid 2=high) or b:{building} (Building enum). anchorX/anchorY = pixel in the SOURCE image sitting on the plot's NORTH apex (origin tile top). tilePx = px-per-tile the art was drawn at (omit if 64). Delete this _comment key in real use. The entries below are illustrative placeholders for a Kenney-style pack.",
+
+  "house_red_1x1.png":   { "key": "z:1:0:0", "footW": 1, "footH": 1, "anchorX": 64,  "anchorY": 40,  "tilePx": 128 },
+  "house_blue_1x1.png":  { "key": "z:1:0:1", "footW": 1, "footH": 1, "anchorX": 64,  "anchorY": 40,  "tilePx": 128 },
+  "estate_3x3.png":      { "key": "z:1:0:3", "footW": 3, "footH": 3, "anchorX": 192, "anchorY": 60,  "tilePx": 128 },
+  "office_2x2.png":      { "key": "z:2:1:1", "footW": 2, "footH": 2, "anchorX": 128, "anchorY": 80,  "tilePx": 128 },
+  "tower_glass_2x2.png": { "key": "z:2:2:1", "footW": 2, "footH": 2, "anchorX": 128, "anchorY": 220, "tilePx": 128 },
+
+  "coal_plant_4x4.png":  { "key": "b:1", "footW": 4, "footH": 4, "anchorX": 256, "anchorY": 96, "tilePx": 128 },
+  "police_3x3.png":      { "key": "b:3", "footW": 3, "footH": 3, "anchorX": 192, "anchorY": 70, "tilePx": 128 }
+}

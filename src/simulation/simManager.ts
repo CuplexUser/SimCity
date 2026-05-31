@@ -2,7 +2,7 @@ import { type World } from '../core/world'
 import { events, type TickEvent, type YearEvent, type LogEvent } from '../core/events'
 import { stepPower } from './power'
 import { stepWater } from './water'
-import { stepZones } from './zones'
+import { stepZones, type LotSizer } from './zones'
 import { stepCrime } from './crime'
 import { stepFire } from './fire'
 import { computeBudget } from './economy'
@@ -16,7 +16,12 @@ export class SimManager {
   population = 0
   funds      = 20_000
 
+  /** Supplied by the renderer once the sprite atlas is known; enables multi-tile lots. */
+  private lotSizer?: LotSizer
+
   constructor(private world: World) {}
+
+  setLotSizer(fn?: LotSizer): void { this.lotSizer = fn }
 
   step(): void {
     this.tick++
@@ -27,7 +32,7 @@ export class SimManager {
     stepWater(this.world)
     stepCrime(this.world)
     stepFire(this.world)
-    const { population } = stepZones(this.world, isYearTick)
+    const { population } = stepZones(this.world, isYearTick, this.lotSizer)
     this.population = population
 
     events.emit<TickEvent>('tick', { tick: this.tick })
