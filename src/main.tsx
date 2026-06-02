@@ -220,6 +220,7 @@ function App() {
         case 'zone': {
           if (t.building !== Building.None) return
           if (t.density > 0)               return
+          if (t.overlay & Overlay.Road)    return
           if (t.zone === tool.zone)        return
           if (t.terrain === Terrain.Water) return
           if (!spendFunds(ZONE_COST[tool.zone])) return

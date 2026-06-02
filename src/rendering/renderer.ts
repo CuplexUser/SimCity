@@ -482,16 +482,31 @@ export class Renderer {
   private _resolveSprite(tile: Tile, col: number, row: number): SpriteMeta | null {
     if (tile.density > 0) {
       const bucket = tile.density <= 2 ? 0 : tile.density <= 5 ? 1 : 2
-      const group  = `z:${tile.zone}:${bucket}`
-      const variants = this.atlas.variants.get(group)
-      if (variants && variants.length > 0) {
-        // Prefer variants whose art footprint matches this lot's footprint.
+
+      // A lot's footprint is fixed when it first develops, but art for that size
+      // may only exist in some density buckets (e.g. a 3×3 house only at bucket 0).
+      // Filling the lot matters more than matching the exact density bucket — a
+      // smaller sprite would expose covered tiles and look "de-zoned". So search
+      // for a footprint-matching variant, preferring the current density bucket
+      // and then the nearest others, before falling back to a mismatched size.
+      const buckets = [0, 1, 2].sort((a, b) => Math.abs(a - bucket) - Math.abs(b - bucket))
+      for (const b of buckets) {
+        const variants = this.atlas.variants.get(`z:${tile.zone}:${b}`)
+        if (!variants) continue
         const fit = variants.filter((k) => {
           const m = this.atlas.meta.get(k)
           return m && m.footW === tile.footW && m.footH === tile.footH
         })
-        const pool = fit.length > 0 ? fit : variants
-        const key = pool[variantHash(col, row) % pool.length]
+        if (fit.length > 0) {
+          const key = fit[variantHash(col, row) % fit.length]
+          return this.atlas.meta.get(key) ?? null
+        }
+      }
+
+      // No art at this footprint anywhere: fall back to any current-bucket variant.
+      const variants = this.atlas.variants.get(`z:${tile.zone}:${bucket}`)
+      if (variants && variants.length > 0) {
+        const key = variants[variantHash(col, row) % variants.length]
         return this.atlas.meta.get(key) ?? null
       }
       return null
