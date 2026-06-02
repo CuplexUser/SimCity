@@ -724,7 +724,6 @@ export function drawRoadTile(
   mask: number, zoom: number,
 ): void {
   const SC = 1.00
-  const RS = 0.52
 
   // Sidewalk (full tile diamond)
   ctx.fillStyle = '#b0a898'
@@ -744,67 +743,89 @@ export function drawRoadTile(
   ctx.beginPath()
   ctx.moveTo(cx - hw * 0.5, cy + hh * 0.5); ctx.lineTo(cx - hw * 0.5, cy + hh * 1.5); ctx.stroke()
 
-  // Asphalt center
-  ctx.fillStyle = '#484848'
-  ctx.beginPath()
-  ctx.moveTo(cx,           cy + hh * (1 - RS))
-  ctx.lineTo(cx + hw * RS, cy + hh)
-  ctx.lineTo(cx,           cy + hh * (1 + RS))
-  ctx.lineTo(cx - hw * RS, cy + hh)
-  ctx.closePath(); ctx.fill()
+  // ── Asphalt ─────────────────────────────────────────────────────────────────
+  // Built from a centre core plus one "arm" reaching out to each connected edge,
+  // so neighbouring road tiles fuse into a continuous carriageway. Each tile edge
+  // midpoint (where two tiles meet) lies at centre ± (hw/2, ±hh/2); an arm is the
+  // parallelogram from the centre out to that midpoint, `RW` wide along the other
+  // tile axis. RW is the fraction of the shared edge the asphalt occupies, so the
+  // remainder shows through as sidewalk fringe.
+  const ccx = cx, ccy = cy + hh   // diamond centre
+  const ex = hw / 2, ey = hh / 2  // centre → edge-midpoint half-vector
+  const RW = 0.58                 // road half-width (fraction of an edge)
 
-  // Crosswalk stripes at intersections (4-way: mask === 15)
+  // bit, arm vector (centre→edge midpoint), perpendicular = the other tile axis
+  const arms = [
+    { bit: 1, ax:  ex, ay: -ey, px:  ex, py:  ey }, // N → upper-right edge
+    { bit: 2, ax:  ex, ay:  ey, px:  ex, py: -ey }, // E → lower-right edge
+    { bit: 4, ax: -ex, ay:  ey, px:  ex, py:  ey }, // S → lower-left edge
+    { bit: 8, ax: -ex, ay: -ey, px:  ex, py: -ey }, // W → upper-left edge
+  ]
+
   const hasN = !!(mask & 1), hasE = !!(mask & 2)
   const hasS = !!(mask & 4), hasW = !!(mask & 8)
-  const connCount = [hasN, hasE, hasS, hasW].filter(Boolean).length
+  const connCount = (+hasN) + (+hasE) + (+hasS) + (+hasW)
 
-  if (connCount >= 3) {
-    // Zebra crossing stripes on the sidewalk band
-    ctx.fillStyle = 'rgba(255,255,255,0.55)'
-    const stripes = 3
-    for (let i = 0; i < stripes; i++) {
-      const t = (i + 0.5) / stripes
-      // NE direction stripe
-      if (hasN && hasE) {
-        const sx = cx + hw * (RS + (1 - RS) * t) * 0.5
-        const sy = cy + hh * (1 - (RS + (1 - RS) * t) * 0.5)
-        ctx.fillRect(sx - 1, sy - 0.5, 2, 1)
-      }
+  ctx.fillStyle = '#484848'
+
+  // Centre core (tile-aligned diamond) — solid junction core + isolated-tile patch
+  ctx.beginPath()
+  ctx.moveTo(ccx,          ccy - ey * RW)
+  ctx.lineTo(ccx + ex * RW, ccy)
+  ctx.lineTo(ccx,          ccy + ey * RW)
+  ctx.lineTo(ccx - ex * RW, ccy)
+  ctx.closePath(); ctx.fill()
+
+  // Arms to each connected neighbour
+  for (const a of arms) {
+    if (!(mask & a.bit)) continue
+    const wx = a.px * RW, wy = a.py * RW
+    ctx.beginPath()
+    ctx.moveTo(ccx + wx,        ccy + wy)
+    ctx.lineTo(ccx - wx,        ccy - wy)
+    ctx.lineTo(ccx + a.ax - wx, ccy + a.ay - wy)
+    ctx.lineTo(ccx + a.ax + wx, ccy + a.ay + wy)
+    ctx.closePath(); ctx.fill()
+  }
+
+  // ── Lane markings ─────────────────────────────────────────────────────────
+  if (connCount <= 2) {
+    // Straight / corner / dead-end: dashed yellow centre line along each arm
+    const dashL = Math.max(2, hw * 0.10)
+    const gapL  = Math.max(2, hw * 0.08)
+    ctx.strokeStyle = '#ffee22'
+    ctx.lineWidth   = Math.max(0.7, zoom * 0.55)
+    ctx.setLineDash([dashL, gapL])
+    for (const a of arms) {
+      if (!(mask & a.bit)) continue
+      ctx.beginPath()
+      ctx.moveTo(ccx, ccy)
+      ctx.lineTo(ccx + a.ax, ccy + a.ay)
+      ctx.stroke()
+    }
+    if (mask === 0) {
+      // Lone tile: small cross to read as paved
+      ctx.beginPath()
+      ctx.moveTo(ccx + ex * 0.5, ccy - ey * 0.5); ctx.lineTo(ccx - ex * 0.5, ccy + ey * 0.5)
+      ctx.moveTo(ccx - ex * 0.5, ccy - ey * 0.5); ctx.lineTo(ccx + ex * 0.5, ccy + ey * 0.5)
+      ctx.stroke()
+    }
+    ctx.setLineDash([])
+  } else {
+    // Junction (3-/4-way): white stop bar across each connected arm near its edge
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+    ctx.lineWidth   = Math.max(0.8, zoom * 0.5)
+    ctx.setLineDash([])
+    for (const a of arms) {
+      if (!(mask & a.bit)) continue
+      const bx = ccx + a.ax * 0.7, by = ccy + a.ay * 0.7
+      const wx = a.px * RW, wy = a.py * RW
+      ctx.beginPath()
+      ctx.moveTo(bx + wx, by + wy)
+      ctx.lineTo(bx - wx, by - wy)
+      ctx.stroke()
     }
   }
-
-  // Center lines
-  const cenX = cx, cenY = cy + hh
-  const nX = cx + hw / 2, nY = cy + hh / 2
-  const sX = cx - hw / 2, sY = cy + hh * 1.5
-  const eX = cx + hw / 2, eY = cy + hh * 1.5
-  const wX = cx - hw / 2, wY = cy + hh / 2
-
-  const dashL = Math.max(2, hw * 0.10)
-  const gapL  = Math.max(2, hw * 0.08)
-  ctx.strokeStyle = '#ffee22'
-  ctx.lineWidth   = Math.max(0.7, zoom * 0.55)
-  ctx.setLineDash([dashL, gapL])
-
-  if (hasN || hasS) {
-    ctx.beginPath()
-    ctx.moveTo(hasN ? nX : cenX, hasN ? nY : cenY)
-    ctx.lineTo(hasS ? sX : cenX, hasS ? sY : cenY)
-    ctx.stroke()
-  }
-  if (hasE || hasW) {
-    ctx.beginPath()
-    ctx.moveTo(hasW ? wX : cenX, hasW ? wY : cenY)
-    ctx.lineTo(hasE ? eX : cenX, hasE ? eY : cenY)
-    ctx.stroke()
-  }
-  if (mask === 0) {
-    ctx.beginPath()
-    ctx.moveTo(nX, nY); ctx.lineTo(sX, sY)
-    ctx.moveTo(wX, wY); ctx.lineTo(eX, eY)
-    ctx.stroke()
-  }
-  ctx.setLineDash([])
 }
 
 // ── Power line tile renderer ───────────────────────────────────────────────────
