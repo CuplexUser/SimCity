@@ -76,6 +76,27 @@ It writes the PNGs *and* `tools/spriteMap.json`, so `pnpm build:atlas` just pack
 rule. Only files whose name starts with `building` are imported (props/details
 are skipped). Edit it to point at your own unzipped pack folders.
 
+### 1c. Kenney Modular Buildings → civic + big buildings (automated)
+
+The City Kits are single-cell only. `blender/assemble_modular.py` builds the art
+they can't, from the **Kenney Modular Buildings** kit (a clean 1×1×0.625-unit grid
+of wall/window/door/roof pieces):
+
+```bash
+blender -b -P tools/blender/assemble_modular.py
+pnpm build:atlas
+```
+
+It tiles modules into parametric `W×D×floors` box buildings and renders:
+- **Civic buildings** keyed `b:{enum}` at a 2×2 footprint — Police, Fire, Hospital,
+  School, Library (replacing the procedural fallback for those).
+- **3×3 big zone buildings** keyed `z:{zone}:{bucket}:{variant}:r{rot}` (4 rotations)
+  so the sim grows real large lots (`zoneLotSizes()` then reports size 3).
+
+Windows face `-Y` by default (rotation map `{-Y:0,+X:90,+Y:180,-X:270}`). It
+**merges** into `tools/spriteMap.json` so the City Kit zone art is preserved.
+Edit the `CIVIC` / `BIG` spec lists at the bottom of the script to add buildings.
+
 ### 2. CC0 isometric pack (fast drop-in)
 
 SimCity 4's own art is copyrighted — do **not** use it. Use a permissively
@@ -94,6 +115,7 @@ angle is ~2:1 dimetric so they sit flat on the grid.
 | `spriteMap.json` | Source-PNG → atlas-key mapping (illustrative entries included). |
 | `blender/render_isos.py` | Headless Blender batch renderer at the in-game iso angle (for custom `.blend` art). |
 | `blender/import_kenney.py` | Headless Blender: import Kenney `.glb` kits → re-origin → render → write PNGs + spriteMap.json. |
+| `blender/assemble_modular.py` | Headless Blender: assemble Kenney Modular Buildings pieces → civic (`b:`) + 3×3 zone buildings → merge spriteMap.json. |
 | `blender/kenney_packs.json` | Maps each Kenney pack folder → zone + density-bucketing rule. |
 | `blender/README.md` | Blender camera/anchor math + modeling conventions. |
 

@@ -133,7 +133,10 @@ def _render_current(objs, fname):
     def px(p):
         co = world_to_camera_view(scene, cam, Vector(p))
         return (co.x * res, (1.0 - co.y) * res)
-    ax, ay = px((0, 0, 0))
+    # The tile's NORTH apex (where the game anchors the sprite) is the Blender
+    # corner (0,1) under this camera azimuth — it has the max screen-up. Anchoring
+    # at (0,0,0) shifts the building 1 tile up-right of its plot.
+    ax, ay = px((0, 1, 0))
     # Tile width = horizontal span of the full unit-tile diamond (N/S corners are the
     # horizontal extremes under the 45-deg camera; E/W coincide in screen x).
     txs = [px((0, 0, 0))[0], px((1, 0, 0))[0], px((1, 1, 0))[0], px((0, 1, 0))[0]]
