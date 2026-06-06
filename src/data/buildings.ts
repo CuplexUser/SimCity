@@ -32,10 +32,10 @@ export const BUILDING_FOOTPRINT: Record<Building, [number, number]> = {
   [Building.SolarFarm]:     [3, 3],
   [Building.WindTurbine]:   [1, 1],
   [Building.WaterTower]:    [2, 2],
-  [Building.PoliceStation]: [3, 3],
-  [Building.FireStation]:   [3, 3],
-  [Building.Hospital]:      [3, 3],
-  [Building.School]:        [3, 3],
+  [Building.PoliceStation]: [2, 2],
+  [Building.FireStation]:   [2, 2],
+  [Building.Hospital]:      [2, 2],
+  [Building.School]:        [2, 2],
   [Building.Library]:       [2, 2],
 }
 

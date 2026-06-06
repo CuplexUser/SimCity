@@ -482,36 +482,60 @@ export class Renderer {
   private _resolveSprite(tile: Tile, col: number, row: number): SpriteMeta | null {
     if (tile.density > 0) {
       const bucket = tile.density <= 2 ? 0 : tile.density <= 5 ? 1 : 2
+      const rot = this._roadFacingRot(col, row, tile.footW, tile.footH)
 
-      // A lot's footprint is fixed when it first develops, but art for that size
-      // may only exist in some density buckets (e.g. a 3×3 house only at bucket 0).
-      // Filling the lot matters more than matching the exact density bucket — a
-      // smaller sprite would expose covered tiles and look "de-zoned". So search
-      // for a footprint-matching variant, preferring the current density bucket
-      // and then the nearest others, before falling back to a mismatched size.
+      // Pick a base variant (footprint-matched, preferring the current density
+      // bucket then nearest), then append the road-facing rotation. atlas.variants
+      // holds base keys "z:zone:bucket:variant"; meta is keyed by "...:r{rot}".
+      const pick = (base: string): SpriteMeta | null =>
+        this.atlas.meta.get(`${base}:r${rot}`) ?? this.atlas.meta.get(`${base}:r0`) ?? null
+
       const buckets = [0, 1, 2].sort((a, b) => Math.abs(a - bucket) - Math.abs(b - bucket))
       for (const b of buckets) {
         const variants = this.atlas.variants.get(`z:${tile.zone}:${b}`)
         if (!variants) continue
-        const fit = variants.filter((k) => {
-          const m = this.atlas.meta.get(k)
+        const fit = variants.filter((base) => {
+          const m = this.atlas.meta.get(`${base}:r0`)
           return m && m.footW === tile.footW && m.footH === tile.footH
         })
-        if (fit.length > 0) {
-          const key = fit[variantHash(col, row) % fit.length]
-          return this.atlas.meta.get(key) ?? null
-        }
+        if (fit.length > 0) return pick(fit[variantHash(col, row) % fit.length])
       }
 
       // No art at this footprint anywhere: fall back to any current-bucket variant.
       const variants = this.atlas.variants.get(`z:${tile.zone}:${bucket}`)
-      if (variants && variants.length > 0) {
-        const key = variants[variantHash(col, row) % variants.length]
-        return this.atlas.meta.get(key) ?? null
-      }
+      if (variants && variants.length > 0) return pick(variants[variantHash(col, row) % variants.length])
       return null
     }
     return this.atlas.meta.get(`b:${tile.building}`) ?? null
+  }
+
+  /**
+   * Rotation index (r0–r3) so the building's front faces an adjacent road.
+   * The footprint perimeter is checked S, E, N, W (front-facing screen sides first
+   * so a visible front is preferred). FRONT_ROT maps a world side → the rotation
+   * whose front points that way; calibrated against the rendered sprites
+   * (tools/blender/import_kenney.py). Defaults to r0 when no road is adjacent.
+   */
+  private static FRONT_ROT = { S: 0, E: 1, N: 2, W: 3 } as const
+
+  private _roadFacingRot(col: number, row: number, fw: number, fh: number): number {
+    const w = this.world
+    const road = (c: number, r: number): boolean =>
+      c >= 0 && r >= 0 && c < w.cols && r < w.rows && (w.get(c, r).overlay & Overlay.Road) !== 0
+    let south = false, east = false, north = false, west = false
+    for (let dc = 0; dc < fw; dc++) {
+      if (road(col + dc, row + fh)) south = true
+      if (road(col + dc, row - 1)) north = true
+    }
+    for (let dr = 0; dr < fh; dr++) {
+      if (road(col + fw, row + dr)) east = true
+      if (road(col - 1, row + dr)) west = true
+    }
+    if (south) return Renderer.FRONT_ROT.S
+    if (east) return Renderer.FRONT_ROT.E
+    if (north) return Renderer.FRONT_ROT.N
+    if (west) return Renderer.FRONT_ROT.W
+    return 0
   }
 
   private _rebuildBuilding(col: number, row: number): void {
@@ -535,6 +559,13 @@ export class Renderer {
       if (!tex) return
       sprite = new Sprite(tex)
       sprite.anchor.set(0.5, BLDG_APEX_Y / BLDG_CANVAS_H)
+      // The procedural texture is baked one tile wide. Scale it up to fill a
+      // multi-tile plot so a placed building matches its footprint (and the hover
+      // preview) instead of sitting as a 1-tile blob in the middle of the plot.
+      // Anchored at the origin tile's north apex, a uniform scale of N grows the
+      // base diamond to the NxN plot with the same apex.
+      const f = Math.max(tile.footW, tile.footH)
+      if (f > 1) sprite.scale.set(f)
     }
 
     sprite.x = (col - row) * BASE_HW
@@ -624,20 +655,21 @@ export class Renderer {
     const col  = this._hoverIdx % this.world.cols
     const row  = Math.floor(this._hoverIdx / this.world.cols)
     const hw   = BASE_HW, hh = BASE_HH
+    const w    = this._hoverW, h = this._hoverH
 
-    // Highlight every tile of the hovered footprint (1×1 for most tools).
-    for (let dr = 0; dr < this._hoverH; dr++) {
-      for (let dc = 0; dc < this._hoverW; dc++) {
-        const c = col + dc, r = row + dr
-        if (!this.world.inBounds(c, r)) continue
-        const tile = this.world.get(c, r)
-        const x = (c - r) * hw
-        const y = (c + r) * hh - tile.elevation * BASE_EH
-        const pts = [x, y, x + hw, y + hh, x, y + hh * 2, x - hw, y + hh]
-        g.poly(pts).fill({ color: 0xffffff, alpha: 0.10 })
-        g.poly(pts).stroke({ color: 0xffffff, width: 1.8, alpha: 0.60 })
-      }
-    }
+    // One unified diamond around the whole footprint (not N separate tile diamonds),
+    // so a multi-tile plot previews as a single unit matching the placed building.
+    const e  = this.world.get(col, row).elevation
+    const bx = (col - row) * hw
+    const by = (col + row) * hh - e * BASE_EH
+    const pts = [
+      bx,                 by,                  // N apex (origin tile top)
+      bx + w * hw,        by + w * hh,         // E
+      bx + (w - h) * hw,  by + (w + h) * hh,   // S
+      bx - h * hw,        by + h * hh,         // W
+    ]
+    g.poly(pts).fill({ color: 0xffffff, alpha: 0.10 })
+    g.poly(pts).stroke({ color: 0xffffff, width: 1.8, alpha: 0.60 })
   }
 
   // ── Night mode ────────────────────────────────────────────────────────────

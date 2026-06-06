@@ -106,40 +106,23 @@ def world_bbox(objs):
     return mn, mx
 
 
-def render_building(objs, key, fname):
-    """Normalize objs to the tile contract, frame, render, return spriteMap entry."""
+def _render_current(objs, fname):
+    """Frame the current pose, render to fname.png, return (anchorX, anchorY, tilePx)."""
     mn, mx = world_bbox(objs)
-    span = mx - mn
-    foot_w = max(1, round(span.x / TILE_UNIT))
-    foot_h = max(1, round(span.y / TILE_UNIT))
-
-    # Re-origin: center the model inside its [0,fw] x [0,fh] tile cell, sit on ground.
-    cx = (mn.x + mx.x) / 2
-    cy = (mn.y + mx.y) / 2
-    shift = Vector((foot_w * TILE_UNIT / 2 - cx, foot_h * TILE_UNIT / 2 - cy, -mn.z))
-    for o in objs:
-        o.location += shift
-
-    # Frame in camera space: project building corners + the footprint diamond.
-    mn2, mx2 = world_bbox(objs)
-    corners = [Vector((x, y, z)) for x in (mn2.x, mx2.x) for y in (mn2.y, mx2.y) for z in (mn2.z, mx2.z)]
-    corners += [Vector((0, 0, 0)), Vector((foot_w, 0, 0)), Vector((foot_w, foot_h, 0)), Vector((0, foot_h, 0))]
-    us = [(p).dot(CAM_RIGHT) for p in corners]
-    vs = [(p).dot(CAM_UP) for p in corners]
+    corners = [Vector((x, y, z)) for x in (mn.x, mx.x) for y in (mn.y, mx.y) for z in (mn.z, mx.z)]
+    corners += [Vector((0, 0, 0)), Vector((1, 0, 0)), Vector((1, 1, 0)), Vector((0, 1, 0))]
+    us = [p.dot(CAM_RIGHT) for p in corners]
+    vs = [p.dot(CAM_UP) for p in corners]
     u_c, v_c = (min(us) + max(us)) / 2, (min(vs) + max(vs)) / 2
     extent = max(max(us) - min(us), max(vs) - min(vs)) * 1.12
 
     cam.data.ortho_scale = extent
-    # Aim camera at the framed center, pulled back along the view axis.
-    center = CAM_RIGHT * u_c + CAM_UP * v_c - CAM_FWD * 100.0
-    cam.location = center
-
+    cam.location = CAM_RIGHT * u_c + CAM_UP * v_c - CAM_FWD * 100.0
     res = max(256, min(1536, round(extent * PPU)))
     scene.render.resolution_x = res
     scene.render.resolution_y = res
     scene.render.resolution_percentage = 100
 
-    # Isolate this building.
     for o in scene.objects:
         if o.type == 'MESH':
             o.hide_render = (o not in objs)
@@ -147,23 +130,58 @@ def render_building(objs, key, fname):
     scene.render.filepath = os.path.join(out_dir, fname + ".png")
     bpy.ops.render.render(write_still=True)
 
-    # Measure anchor (north apex = world origin) and tilePx, empirically.
     def px(p):
         co = world_to_camera_view(scene, cam, Vector(p))
         return (co.x * res, (1.0 - co.y) * res)
     ax, ay = px((0, 0, 0))
-    # Tile screen width = horizontal span of the full unit-tile diamond. Under the
-    # 45-deg camera the N/S corners are the horizontal extremes (E/W coincide in x).
-    txs = [px((0, 0, 0))[0], px((TILE_UNIT, 0, 0))[0],
-           px((TILE_UNIT, TILE_UNIT, 0))[0], px((0, TILE_UNIT, 0))[0]]
-    tile_px = max(txs) - min(txs)
+    # Tile width = horizontal span of the full unit-tile diamond (N/S corners are the
+    # horizontal extremes under the 45-deg camera; E/W coincide in screen x).
+    txs = [px((0, 0, 0))[0], px((1, 0, 0))[0], px((1, 1, 0))[0], px((0, 1, 0))[0]]
+    return round(ax), round(ay), round(max(txs) - min(txs))
 
-    return {
-        "key": key,
-        "footW": foot_w, "footH": foot_h,
-        "anchorX": round(ax), "anchorY": round(ay),
-        "tilePx": round(tile_px),
-    }
+
+def render_building(objs, zone, bucket, variant, name):
+    """Force the model to a 1x1 tile cell, then render 4 rotations (r0..r3) so the
+    renderer can face the building toward its road. Returns [(fname, entry), ...]."""
+    # Uniform-scale the assembly (about world origin) so it fits one tile in plan.
+    mn, mx = world_bbox(objs)
+    span = mx - mn
+    s = TILE_UNIT / max(span.x, span.y, 1e-4)
+    for o in objs:
+        o.location = o.location * s
+        o.scale = o.scale * s
+    bpy.context.view_layer.update()
+
+    # Center in the [0,1]x[0,1] cell, sitting on the ground.
+    mn, mx = world_bbox(objs)
+    shift = Vector((0.5 - (mn.x + mx.x) / 2, 0.5 - (mn.y + mx.y) / 2, -mn.z))
+    for o in objs:
+        o.location += shift
+    bpy.context.view_layer.update()
+
+    # Pivot at the cell center so 90-deg steps rotate the building in place.
+    pivot = bpy.data.objects.new("pivot", None)
+    pivot.location = (0.5, 0.5, 0.0)
+    scene.collection.objects.link(pivot)
+    bpy.context.view_layer.update()
+    for o in objs:
+        o.parent = pivot
+        o.matrix_parent_inverse = pivot.matrix_world.inverted()
+
+    out = []
+    for rot in range(4):
+        pivot.rotation_euler = (0.0, 0.0, math.radians(90 * rot))
+        bpy.context.view_layer.update()
+        fname = f"z_{zone}_{bucket}_{variant}_r{rot}__{name}"
+        ax, ay, tile_px = _render_current(objs, fname)
+        out.append((fname + ".png", {
+            "key": f"z:{zone}:{bucket}:{variant}:r{rot}",
+            "footW": 1, "footH": 1,
+            "anchorX": ax, "anchorY": ay, "tilePx": tile_px,
+        }))
+
+    bpy.data.objects.remove(pivot, do_unlink=True)
+    return out
 
 
 def bucket_assignments(buildings, mode):
@@ -221,11 +239,9 @@ def main():
             b = buckets[name]
             v = variant_counter.get(b, 0)
             variant_counter[b] = v + 1
-            key = f"z:{zone}:{b}:{v}"
-            fname = f"z_{zone}_{b}_{v}__{name}"
-            entry = render_building(objs, key, fname)
-            sprite_map[fname + ".png"] = entry
-            summary.append((key, name, entry["footW"], entry["footH"], entry["tilePx"]))
+            for png, entry in render_building(objs, zone, b, v, name):
+                sprite_map[png] = entry
+            summary.append((f"z:{zone}:{b}:{v}", name))
             # Remove this building's objects before the next import.
             for o in list(objs):
                 bpy.data.objects.remove(o, do_unlink=True)
@@ -238,9 +254,9 @@ def main():
         json.dump(sprite_map, f, indent=2)
 
     print("\n=== WebCity import summary ===")
-    for key, name, fw, fh, tp in summary:
-        print(f"  {key:12s} <- {name:24s} foot {fw}x{fh}  tilePx={tp}")
-    print(f"Rendered {len(summary)} buildings to {out_dir}")
+    for key, name in summary:
+        print(f"  {key:12s} <- {name}")
+    print(f"Rendered {len(summary)} buildings x4 rotations = {len(sprite_map)} sprites to {out_dir}")
     print(f"Wrote sprite map: {map_path}")
     print("Next: pnpm build:atlas")
 

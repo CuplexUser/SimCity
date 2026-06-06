@@ -71,13 +71,16 @@ export async function loadSpriteAtlas(): Promise<LoadedAtlas> {
       frameH: e.frame.h,
     })
 
-    // Group zone-building variants: key "z:{zone}:{bucket}:{variant}"
+    // Group zone-building variants: key "z:{zone}:{bucket}:{variant}:r{rot}".
+    // variants[groupKey] holds the distinct *base* keys (no rotation); the renderer
+    // appends ":r{rot}" once it knows which way the building should face.
     if (e.key.startsWith('z:')) {
       const parts = e.key.split(':')
-      if (parts.length === 4) {
+      if (parts.length === 5) {
         const groupKey = `${parts[0]}:${parts[1]}:${parts[2]}`
+        const baseKey = `${parts[0]}:${parts[1]}:${parts[2]}:${parts[3]}`
         const arr = result.variants.get(groupKey) ?? []
-        arr.push(e.key)
+        if (!arr.includes(baseKey)) arr.push(baseKey)
         result.variants.set(groupKey, arr)
       }
     }
