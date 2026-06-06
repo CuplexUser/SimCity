@@ -143,8 +143,35 @@ Tile size at 1×: 64 × 32 px. Each elevation level = +8 px vertical offset.
 
 ---
 
+## Building art
+
+Buildings render from a sprite atlas (`public/sprites/atlas.png` + `manifest.json`),
+with procedural OffscreenCanvas sprites as the fallback for any missing key.
+
+The current atlas is generated from **Kenney's CC0 City Kits** (Suburban,
+Commercial, Industrial). The `.glb` models are batch-imported, re-origined to the
+tile grid, and rendered at the in-game 2:1 dimetric angle by a headless Blender
+script, then packed:
+
+```bash
+blender -b -P tools/blender/import_kenney.py -- \
+    --config tools/blender/kenney_packs.json --out tools/assets-src
+pnpm build:atlas
+```
+
+See `tools/README.md` for the full asset pipeline and the geometry contract.
+
+## Credits
+
+Building 3D art: **[Kenney](https://www.kenney.nl)** — City Kit (Suburban),
+City Kit (Commercial), and City Kit (Industrial), all released under
+[CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) (public domain).
+Crediting Kenney is not required by the license, but very much appreciated —
+consider supporting their work at [kenney.nl/donate](https://www.kenney.nl/donate).
+
 ## Roadmap
 
 See `TODO.md` for the full feature roadmap.
 
-Visual goal: SimCity 4 aesthetic — the renderer is capable of Blender-rendered sprite atlases; procedural OffscreenCanvas sprites are the current fallback until real art exists.
+Visual goal: SimCity 4 aesthetic — Blender-rendered sprite atlases (currently
+sourced from the Kenney City Kits above), with procedural sprites as fallback.

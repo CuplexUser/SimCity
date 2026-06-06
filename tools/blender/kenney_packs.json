@@ -1,0 +1,20 @@
+{
+  "_comment": "Pack config for import_kenney.py. zone: 1=R 2=C 3=I. mode controls density bucketing: 'all-low' puts every building in bucket 0 (suburban = houses only); 'height' splits buildings into buckets 0/1/2 by Z-height tertiles; 'height+sky' = like height but any name containing 'skyscraper' is forced to bucket 2. Only files whose basename starts with 'building' are imported (skips detail-/low-detail-/chimney/fence/tree/etc props).",
+  "packs": [
+    {
+      "glb": "D:/Code/Claude/Simcity/game_assets/kenney_city-kit-suburban_20/Models/GLB format",
+      "zone": 1,
+      "mode": "all-low"
+    },
+    {
+      "glb": "D:/Code/Claude/Simcity/game_assets/kenney_city-kit-commercial_2.1/Models/GLB format",
+      "zone": 2,
+      "mode": "height+sky"
+    },
+    {
+      "glb": "D:/Code/Claude/Simcity/game_assets/kenney_city-kit-industrial_1.0/Models/GLB format",
+      "zone": 3,
+      "mode": "height"
+    }
+  ]
+}

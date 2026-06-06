@@ -54,6 +54,28 @@ pnpm build:atlas
 The render script uses an orthographic 2:1 dimetric camera + SW sun and writes a
 `_blender_meta.json` with footprints/anchors so packing is automatic.
 
+### 1b. Kenney City Kits (the current atlas — automated)
+
+The bundled atlas is built from **Kenney's CC0 City Kits** (Suburban / Commercial /
+Industrial). `blender/import_kenney.py` does the whole job headlessly — you never
+open Blender's UI:
+
+```bash
+blender -b -P tools/blender/import_kenney.py -- \
+    --config tools/blender/kenney_packs.json --out tools/assets-src
+pnpm build:atlas
+```
+
+For each `.glb` it: imports, re-origins to the tile contract (Kenney models are
+center-origin; the game wants the NW corner at world origin), renders with the
+ORTHO 2:1 camera + Workbench engine (EEVEE writes nothing in headless `-b` mode),
+and **measures the anchor + per-sprite `tilePx` empirically** from the projection.
+It writes the PNGs *and* `tools/spriteMap.json`, so `pnpm build:atlas` just packs.
+
+`kenney_packs.json` maps each pack → zone (1=R 2=C 3=I) and a density-bucketing
+rule. Only files whose name starts with `building` are imported (props/details
+are skipped). Edit it to point at your own unzipped pack folders.
+
 ### 2. CC0 isometric pack (fast drop-in)
 
 SimCity 4's own art is copyrighted — do **not** use it. Use a permissively
@@ -70,5 +92,14 @@ angle is ~2:1 dimetric so they sit flat on the grid.
 | `genStarterAtlas.mjs` | Generates the built-in starter atlas with `@napi-rs/canvas` (no external assets). Swappable per-key by the two methods above. |
 | `buildAtlas.mjs` | Packs `assets-src/*.png` + `spriteMap.json` → atlas + manifest. |
 | `spriteMap.json` | Source-PNG → atlas-key mapping (illustrative entries included). |
-| `blender/render_isos.py` | Headless Blender batch renderer at the in-game iso angle. |
+| `blender/render_isos.py` | Headless Blender batch renderer at the in-game iso angle (for custom `.blend` art). |
+| `blender/import_kenney.py` | Headless Blender: import Kenney `.glb` kits → re-origin → render → write PNGs + spriteMap.json. |
+| `blender/kenney_packs.json` | Maps each Kenney pack folder → zone + density-bucketing rule. |
 | `blender/README.md` | Blender camera/anchor math + modeling conventions. |
+
+## Credits
+
+Building art is from **[Kenney](https://www.kenney.nl)** City Kits (Suburban,
+Commercial, Industrial), released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
+Crediting Kenney isn't required but is appreciated — support at
+[kenney.nl/donate](https://www.kenney.nl/donate).
