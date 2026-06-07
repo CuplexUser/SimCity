@@ -94,6 +94,33 @@ export async function loadGameState(slot = 'autosave'): Promise<{ world: World; 
   return save ? deserializeGameState(save) : null
 }
 
+// ── JSON file export / import ────────────────────────────────────────────────
+// Same payload as the IndexedDB slots, but as a portable JSON string the UI can
+// download to / read from a `.json` file. Pure (no DOM) so it stays testable.
+
+const DEFAULT_SIM: SimState = { year: 2000, tick: 0, population: 0, funds: 20_000 }
+
+export function gameStateToJSON(world: World, sim: SimState): string {
+  return JSON.stringify(serializeGameState(world, sim), null, 2)
+}
+
+export function gameStateFromJSON(text: string): { world: World; sim: SimState } {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new Error('File is not valid JSON')
+  }
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as SaveGame).runs)) {
+    throw new Error('Not a WebCity save file')
+  }
+  const save = parsed as GameStateSave
+  // deserializeWorld validates version, grid dimensions and run totals.
+  const world = deserializeWorld(save)
+  const sim = save.sim ? { ...DEFAULT_SIM, ...save.sim } : { ...DEFAULT_SIM }
+  return { world, sim }
+}
+
 export async function listSavedCities(): Promise<string[]> {
   const allKeys = await keys()
   return allKeys

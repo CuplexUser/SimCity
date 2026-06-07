@@ -2,9 +2,15 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
+  // PixiJS + atlas init under the SwiftShader GL backend takes ~20s and slows
+  // further when several tests run back-to-back; the default 30s is too tight.
+  timeout: 60_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // The SwiftShader GL backend is slow and accumulates lag across a long serial
+  // run, occasionally tipping a heavy test over its timeout; one local retry (two
+  // in CI) absorbs that environmental flakiness without masking real failures.
+  retries: process.env.CI ? 2 : 1,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],
   outputDir: 'test-results/playwright',

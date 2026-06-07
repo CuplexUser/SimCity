@@ -92,6 +92,7 @@ export class Renderer {
   private terrainGfx:      (Graphics | null)[]   // elevation sides + solid fill
   private terrainSprites:  (Sprite   | null)[]   // noise texture (Water/Dirt/Forest only)
   private overlaySprites:  (Sprite   | null)[]
+  private overlayMask:     Int8Array            // road mask baked into each overlay sprite (-1 = none); debug/test signal
   private buildingSprites: (Sprite   | null)[]
 
   // Shared texture cache for building/overlay textures (~100 textures)
@@ -137,6 +138,7 @@ export class Renderer {
     this.terrainGfx      = new Array(n).fill(null)
     this.terrainSprites  = new Array(n).fill(null)
     this.overlaySprites  = new Array(n).fill(null)
+    this.overlayMask     = new Int8Array(n).fill(-1)
     this.buildingSprites = new Array(n).fill(null)
   }
 
@@ -259,10 +261,13 @@ export class Renderer {
             dirtyIdxs.add(fr * world.cols + fc)
           }
         }
-        if (tile.overlay & Overlay.Road) {
-          for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]] as const) {
-            const nc = col + dc, nr = row + dr
-            if (world.inBounds(nc, nr)) overlayIdxs.add(nr * world.cols + nc)
+        // Rebuild any road-bearing neighbor's overlay so connections fuse on
+        // placement AND retract on bulldoze. Keying off the neighbor (not this
+        // tile) covers removal, where this tile no longer has a road itself.
+        for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]] as const) {
+          const nc = col + dc, nr = row + dr
+          if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.Road)) {
+            overlayIdxs.add(nr * world.cols + nc)
           }
         }
       }
@@ -441,6 +446,13 @@ export class Renderer {
 
   // ── Overlay sprites ──────────────────────────────────────────────────────
 
+  /** Road connection mask currently baked into the rendered overlay sprite at
+   *  (col,row), or -1 if no road overlay is drawn there. Exposed for tests so
+   *  they can assert neighbor sprites actually rebuild on placement/removal. */
+  renderedRoadMask(col: number, row: number): number {
+    return this.overlayMask[this._idx(col, row)]
+  }
+
   private _roadMask(col: number, row: number): number {
     const { world } = this
     let mask = 0
@@ -455,11 +467,13 @@ export class Renderer {
     const idx = this._idx(col, row)
     const old = this.overlaySprites[idx]
     if (old) { this.worldContainer.removeChild(old); old.destroy({ texture: false }); this.overlaySprites[idx] = null }
+    this.overlayMask[idx] = -1
 
     const tile = this.world.get(col, row)
     if (!tile.overlay) return
 
     const mask = (tile.overlay & Overlay.Road) ? this._roadMask(col, row) : 0
+    if (tile.overlay & Overlay.Road) this.overlayMask[idx] = mask
     const tex  = this.texCache.get(getOverlayKey(tile.overlay, mask))
     if (!tex) return
 

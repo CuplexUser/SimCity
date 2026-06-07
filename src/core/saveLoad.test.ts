@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deserializeGameState, deserializeWorld, normalizeCityName, serializeGameState, serializeWorld } from './saveLoad'
+import { deserializeGameState, deserializeWorld, gameStateFromJSON, gameStateToJSON, normalizeCityName, serializeGameState, serializeWorld } from './saveLoad'
 import { World } from './world'
 import { Building, Overlay, Terrain, Zone } from './tile'
 
@@ -49,5 +49,28 @@ describe('saveLoad', () => {
   it('normalizes city names for save slots', () => {
     expect(normalizeCityName('  New   Stockholm  ')).toBe('New Stockholm')
     expect(normalizeCityName('   ')).toBe('Untitled City')
+  })
+
+  it('round-trips a city through a JSON file string', () => {
+    const world = new World()
+    world.set(5, 6, { building: Building.Hospital, zone: Zone.None, powered: true })
+    world.set(0, 0, { overlay: Overlay.Road })
+    const json = gameStateToJSON(world, { year: 2031, tick: 7, population: 5000, funds: 12_345 })
+
+    const restored = gameStateFromJSON(json)
+    expect(restored.world.get(5, 6).building).toBe(Building.Hospital)
+    expect(restored.world.get(0, 0).overlay & Overlay.Road).toBeTruthy()
+    expect(restored.sim).toEqual({ year: 2031, tick: 7, population: 5000, funds: 12_345 })
+  })
+
+  it('defaults sim state when the file omits it', () => {
+    const world = new World()
+    const json = JSON.stringify(serializeWorld(world))  // no sim field
+    expect(gameStateFromJSON(json).sim).toEqual({ year: 2000, tick: 0, population: 0, funds: 20_000 })
+  })
+
+  it('rejects non-JSON and non-city files', () => {
+    expect(() => gameStateFromJSON('not json {')).toThrow('valid JSON')
+    expect(() => gameStateFromJSON('{"foo":1}')).toThrow('Not a WebCity save file')
   })
 })

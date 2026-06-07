@@ -19,6 +19,7 @@
 - [x] City log (year-end budget summary + population milestones)
 - [x] Road connectivity check (A* in utils/astar.ts)
 - [x] Save/load (IndexedDB via idb-keyval, named city slots, RLE-compressed grid)
+- [x] Save/load to a JSON file (Export/Import in Options panel) — portable city files beyond IndexedDB
 - [x] **Renderer migrated to PixiJS v8 (WebGL)** — target upgraded to SimCity 4 quality
 
 ## Phase 2 — Services ✓ complete
@@ -44,9 +45,10 @@
 - [x] Solar Farm (30-tile range, no fuel upkeep)
 - [x] Wind Turbine (25-tile range, cheap)
 
-## Phase 3 — Art / SC4 visual quality ✓ complete
-- [ ] Blender-rendered isometric building sprites — R/C/I at each density stage
-- [ ] Blender-rendered infrastructure sprites — roads with sidewalk/lane markings, power pylons
+## Phase 3 — Art / SC4 visual quality
+- [x] Blender-rendered isometric building sprites — R/C/I at every density stage (Kenney City Kits + modular assembly; R/C/I all have low/mid/high buckets, incl. mid-density residential `z:1:1`)
+- [x] Plopped civic + power buildings — Blender-assembled from the Kenney Modular kit (`b:` keys)
+- [ ] Blender-rendered infrastructure sprites — power pylons (roads already draw sidewalk fringe + lane markings procedurally; pylons still procedural)
 - [ ] Sprite atlases packed per zoom level (2×, 4×) — hot-swap via `bakeAllTextures()` key
 - [x] Proper terrain texture — Water/Dirt/Forest use per-pixel noise sprites; Grass retains per-tile color variation
 - [x] Animated water tiles — shimmer via per-frame tint oscillation on Water terrain sprites
@@ -60,8 +62,8 @@
 - [ ] Metro (underground toggle view)
 - [ ] Highways
 - [ ] Bus depots
-- [ ] Road auto-connect — update neighbor road masks on placement
-- [ ] Drag-to-zone rectangular selection
+- [x] Road auto-connect — neighbor road masks rebuild on placement AND bulldoze so segments fuse/retract live
+- [x] Drag-to-zone rectangular selection — zone tools drag out a previewed rectangle, applied on mouseup (respects rules + funds)
 
 ## Phase 5 — Economy depth
 - [ ] Bond system (issue / pay off, 10-year fixed, 5–12% interest)

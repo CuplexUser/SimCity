@@ -6,7 +6,7 @@ import { generateWorld } from './data/worldGen'
 import { Zone, Overlay, Building, Terrain, type ActiveTool } from './core/tile'
 import { events, type YearEvent } from './core/events'
 import { applyBulldoze } from './core/bulldoze'
-import { listSavedCities, loadGameState, normalizeCityName, saveGameState } from './core/saveLoad'
+import { gameStateFromJSON, gameStateToJSON, listSavedCities, loadGameState, normalizeCityName, saveGameState } from './core/saveLoad'
 import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolbar'
 import { BottomBar } from './ui/BottomBar'
 import { CityLog } from './ui/CityLog'
@@ -126,6 +126,48 @@ function App() {
     }
   }
 
+  function handleExportFile() {
+    const eng = engineRef.current
+    if (!eng?.renderer) return
+    const name = normalizeCityName(cityName)
+    try {
+      const json = gameStateToJSON(eng.world, {
+        year: eng.sim.getYear(),
+        tick: eng.sim.getTick(),
+        population: eng.sim.population,
+        funds: fundsRef.current,
+      })
+      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${name}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setCityName(name)
+      setOptionsStatus(`${name} exported`)
+    } catch {
+      setOptionsStatus('Export failed')
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    const eng = engineRef.current
+    if (!eng?.renderer) return
+    try {
+      const { world, sim } = gameStateFromJSON(await file.text())
+      eng.world.replaceFrom(world)
+      eng.sim.reset(sim)
+      resetUiState(sim.year, sim.population, sim.funds)
+      const name = normalizeCityName(file.name.replace(/\.json$/i, ''))
+      setCityName(name)
+      eng.renderer.minimap.markDirty()
+      eng.renderer.draw()
+      setOptionsStatus(`${name} imported`)
+    } catch (err) {
+      setOptionsStatus(err instanceof Error ? `Import failed: ${err.message}` : 'Import failed')
+    }
+  }
+
   async function refreshSavedCities() {
     try {
       const names = await listSavedCities()
@@ -185,6 +227,32 @@ function App() {
       return true
     }
 
+    // Zone a single tile if the rules allow and funds permit. Used for both single
+    // clicks and drag-rectangle fills.
+    function placeZoneTile(col: number, row: number, zone: Zone): boolean {
+      if (!eng.world.inBounds(col, row)) return false
+      const t = eng.world.get(col, row)
+      if (t.building !== Building.None) return false
+      if (t.density > 0)               return false
+      if (t.overlay & Overlay.Road)    return false
+      if (t.zone === zone)             return false
+      if (t.terrain === Terrain.Water) return false
+      if (!spendFunds(ZONE_COST[zone])) return false
+      eng.world.set(col, row, { zone, density: 0 })
+      eng.renderer?.minimap.markDirty()
+      return true
+    }
+
+    // Fill the rectangle spanned by two corner tiles with a zone (stops silently
+    // once funds run out — placeZoneTile returns false on every tile after that).
+    function applyZoneRect(a: { col: number; row: number }, b: { col: number; row: number }, zone: Zone) {
+      const minC = Math.min(a.col, b.col), maxC = Math.max(a.col, b.col)
+      const minR = Math.min(a.row, b.row), maxR = Math.max(a.row, b.row)
+      for (let r = minR; r <= maxR; r++)
+        for (let c = minC; c <= maxC; c++)
+          placeZoneTile(c, r, zone)
+    }
+
     function findHitTile(px: number, py: number): { col: number; row: number } | null {
       const { hw, hh } = eng.camera
       const naive  = eng.camera.screenToWorld(px, py)
@@ -218,14 +286,7 @@ function App() {
 
       switch (tool.kind) {
         case 'zone': {
-          if (t.building !== Building.None) return
-          if (t.density > 0)               return
-          if (t.overlay & Overlay.Road)    return
-          if (t.zone === tool.zone)        return
-          if (t.terrain === Terrain.Water) return
-          if (!spendFunds(ZONE_COST[tool.zone])) return
-          eng.world.set(col, row, { zone: tool.zone, density: 0 })
-          eng.renderer?.minimap.markDirty()
+          placeZoneTile(col, row, tool.zone)
           break
         }
         case 'building': {
@@ -269,6 +330,16 @@ function App() {
     let minimapDragging    = false
     let lastX = 0, lastY   = 0
     let terrainLevelTarget: number | undefined = undefined
+    // Drag-to-zone: zone tools fill the rectangle dragged out, applied on mouseup.
+    let zoneDrag: { start: { col: number; row: number }; end: { col: number; row: number } } | null = null
+
+    function showZoneRectPreview() {
+      if (!zoneDrag) return
+      const { start, end } = zoneDrag
+      const minC = Math.min(start.col, end.col), maxC = Math.max(start.col, end.col)
+      const minR = Math.min(start.row, end.row), maxR = Math.max(start.row, end.row)
+      eng.renderer?.setHoverTile(minC, minR, maxC - minC + 1, maxR - minR + 1)
+    }
 
     function canvasPos(clientX: number, clientY: number) {
       const r = canvas.getBoundingClientRect()
@@ -299,6 +370,13 @@ function App() {
           return
         }
         if (toolRef.current) {
+          // Zone tools drag out a rectangle (applied on mouseup) rather than painting.
+          if (toolRef.current.kind === 'zone') {
+            const rect = canvas.getBoundingClientRect()
+            const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
+            if (hit) { zoneDrag = { start: hit, end: hit }; showZoneRectPreview() }
+            return
+          }
           // Capture the starting elevation for terrain levelling so drag stays consistent
           if (toolRef.current.kind === 'bulldoze' && toolRef.current.mode === 'terrain') {
             const rect = canvas.getBoundingClientRect()
@@ -314,6 +392,15 @@ function App() {
     function onMouseMove(e: MouseEvent) {
       if (minimapDragging) { panToMinimap(e.clientX, e.clientY); return }
       if (panning)  { eng.camera.pan(e.clientX - lastX, e.clientY - lastY); lastX = e.clientX; lastY = e.clientY }
+
+      // Extending a zone-drag rectangle: update its end corner and preview it.
+      if (zoneDrag) {
+        const rect = canvas.getBoundingClientRect()
+        const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
+        if (hit) { zoneDrag.end = hit; showZoneRectPreview() }
+        return
+      }
+
       if (painting) placeTile(e.clientX, e.clientY)
 
       // Hover highlight — show the full footprint when a building tool is active
@@ -328,7 +415,15 @@ function App() {
       }
     }
     function onMouseUp(e: MouseEvent) {
-      if (e.button === 0) { minimapDragging = false; painting = false; terrainLevelTarget = undefined }
+      if (e.button === 0) {
+        // Commit a zone-drag rectangle (still a single tile for a plain click).
+        if (zoneDrag) {
+          const tool = toolRef.current
+          if (tool?.kind === 'zone') applyZoneRect(zoneDrag.start, zoneDrag.end, tool.zone)
+          zoneDrag = null
+        }
+        minimapDragging = false; painting = false; terrainLevelTarget = undefined
+      }
       if (e.button === 1 || e.button === 2) panning = false
     }
     function onWheel(e: WheelEvent) {
@@ -416,6 +511,8 @@ function App() {
         onNewGame={handleNewGame}
         onSaveState={handleSaveState}
         onLoadState={handleLoadState}
+        onExportFile={handleExportFile}
+        onImportFile={handleImportFile}
         onOptionsOpen={refreshSavedCities}
         cityName={cityName}
         onCityNameChange={setCityName}

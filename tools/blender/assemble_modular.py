@@ -432,7 +432,29 @@ RES_PALETTE = {
     'roof': (0.16, 0.42, 0.26),   # forest green, like the suburban gable roofs
     'trim': (0.40, 0.42, 0.44),   # mid gray for door / balcony / details
 }
-BIG = [
+# Mid-density residential (z:1:1): single-cell (foot=1) modular apartment blocks,
+# 4 rotations + variants, gray walls + green roof so they sit between the suburban
+# houses (z:1:0) and the big_res block (z:1:2). The Suburban City Kit has no
+# mid-density art, so without these the sim falls back to low houses for density 3-5.
+MID_RES = [
+    (1, 1, 0, "mid_res_a", 1, dict(
+        mw=2, md=2, floors=2, wall="building-window",
+        ground="building-window-balcony", corner="building-corner"),
+        None, RES_PALETTE),
+    (1, 1, 1, "mid_res_b", 1, dict(
+        mw=2, md=2, floors=3, wall="building-window",
+        corner="building-corner-window"),
+        None, RES_PALETTE),
+    (1, 1, 2, "mid_res_c", 1, dict(
+        mw=3, md=2, floors=2, wall="building-windows-round",
+        ground="building-window-awnings", corner="building-corner-window-top-round"),
+        None, RES_PALETTE),
+    (1, 1, 3, "mid_res_d", 1, dict(
+        mw=2, md=2, floors=3, wall="building-window-large",
+        ground="building-window-balcony", corner="building-corner"),
+        None, RES_PALETTE),
+]
+BIG = MID_RES + [
     (1, 2, 0, "big_res", 3, dict(
         mw=3, md=3, floors=3, wall="building-window",
         ground="building-window-balcony", corner="building-corner",

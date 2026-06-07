@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { Zone, Building, type ActiveTool, type BulldozeMode } from '../core/tile'
 
 export type ToolKey =
@@ -110,6 +110,8 @@ interface Props {
   onNewGame:    () => void | Promise<void>
   onSaveState:  () => void | Promise<void>
   onLoadState:  () => void | Promise<void>
+  onExportFile: () => void | Promise<void>
+  onImportFile: (file: File) => void | Promise<void>
   onOptionsOpen: () => void | Promise<void>
   cityName:     string
   onCityNameChange: (name: string) => void
@@ -123,11 +125,12 @@ interface Props {
 
 export function Toolbar({
   activeKey, onKeyChange,
-  onNewGame, onSaveState, onLoadState, onOptionsOpen,
+  onNewGame, onSaveState, onLoadState, onExportFile, onImportFile, onOptionsOpen,
   cityName, onCityNameChange, savedCities, status,
   nightMode, onNightMode, showZoneOverlay, onZoneOverlay,
 }: Props) {
   const [openCat, setOpenCat] = useState<CategoryId | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function toggleCat(id: CategoryId) {
     if (id === 'options') {
@@ -312,6 +315,8 @@ export function Toolbar({
             { label: 'New City', action: onNewGame },
             { label: 'Save City', action: onSaveState },
             { label: 'Load City', action: onLoadState },
+            { label: 'Export to File…', action: onExportFile },
+            { label: 'Import from File…', action: () => fileInputRef.current?.click() },
           ].map(({ label, action }) => (
             <button
               key={label}
@@ -328,6 +333,21 @@ export function Toolbar({
           {status && <div style={{ color: '#aaa', fontSize: 11, padding: '2px 4px' }}>{status}</div>}
         </div>
       )}
+
+      {/* Hidden file picker for "Import from File…" — rendered unconditionally so
+          it's always in the DOM (the Options button triggers it via ref). */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const input = e.currentTarget as HTMLInputElement
+          const file = input.files?.[0]
+          if (file) void onImportFile(file)
+          input.value = ''  // allow re-importing the same file
+        }}
+      />
     </div>
   )
 }
