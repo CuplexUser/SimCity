@@ -40,11 +40,11 @@ const BASE_HW = TILE_W / 2   // 32
 const BASE_HH = TILE_H / 2   // 16
 const BASE_EH = ELEV_H        // 8
 
-// Elevation side face colours
+// Elevation side face colors
 const ELEV_DARK  = 0x2a2a1a
 const ELEV_LIGHT = 0x6a6848
 
-// ── Terrain colour helpers ───────────────────────────────────────────────────
+// ── Terrain color helpers ───────────────────────────────────────────────────
 
 function grassHex(col: number, row: number): number {
   const h = (Math.sin(col * 7.31 + row * 11.71) * 0.5 + 0.5)
@@ -71,7 +71,7 @@ function zoneOutlineHex(zone: Zone): number {
 
 // ── Terrain texture baking ───────────────────────────────────────────────────
 // Bakes Water/Dirt/Forest terrain at zoom=1 into a PIXI.Texture.
-// Grass uses solid-colour Graphics (per-tile colour variation via grassHex).
+// Grass uses solid-color Graphics (per-tile color variation via grassHex).
 
 function bakeTerrainTex(terrain: Terrain): Texture {
   const oc  = new OffscreenCanvas(TILE_W, TILE_H)
@@ -602,7 +602,7 @@ export class Renderer {
       ]
 
       if (this._showZoneOverlay) {
-        // Semi-transparent coloured fill over all zoned tiles
+        // Semi-transparent colored fill over all zoned tiles
         const alpha = tile.density === 0 ? 0.22 : 0.12
         g.poly(pts).fill({ color: zoneOutlineHex(tile.zone), alpha })
       }

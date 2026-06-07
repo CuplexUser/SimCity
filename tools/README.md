@@ -87,15 +87,36 @@ blender -b -P tools/blender/assemble_modular.py
 pnpm build:atlas
 ```
 
-It tiles modules into parametric `W×D×floors` box buildings and renders:
-- **Civic buildings** keyed `b:{enum}` at a 2×2 footprint — Police, Fire, Hospital,
-  School, Library (replacing the procedural fallback for those).
+It tiles modules into parametric `W×D×floors` buildings — but not plain boxes.
+Each spec mixes the kit's modules so buildings read as distinct: window styles
+(`building-window-large`, `building-windows-round` arched, `building-window-awnings`,
+`building-window-balcony`), round-top corner pieces, a front entrance (door +
+`building-steps-wide` stoop) or a row of `building-door` engine bays, a bordered
+**parapet roof** (`roof-flat-border-side`/`-corner` lip + `roof-flat-detail-*`
+rooftop units) instead of a flat slab, optional rooftop AC, and a `roof-flat-top`-
+capped watch tower. It renders:
+- **Civic buildings** keyed `b:{enum}` at a 2×2 footprint — Police (large windows),
+  Fire (engine bays + watch tower), Hospital (tall, awnings, rooftop plant), School
+  (wide, arched windows, awnings), Library (arched/classical) — replacing the
+  procedural fallback for those.
 - **3×3 big zone buildings** keyed `z:{zone}:{bucket}:{variant}:r{rot}` (4 rotations)
-  so the sim grows real large lots (`zoneLotSizes()` then reports size 3).
+  so the sim grows real large lots (`zoneLotSizes()` then reports size 3):
+  residential w/ balconies (gray walls + green roof to match the Suburban City
+  Kit houses), a blue-glass commercial tower, a drab industrial plant.
 
-Windows face `-Y` by default (rotation map `{-Y:0,+X:90,+Y:180,-X:270}`). It
-**merges** into `tools/spriteMap.json` so the City Kit zone art is preserved.
-Edit the `CIVIC` / `BIG` spec lists at the bottom of the script to add buildings.
+Most buildings are the kit's beige texture multiplied by a per-building `tint`,
+but a building can instead set a `palette` (gray `wall` / green `roof` / `trim`)
+that renders flat per-group colors in Workbench OBJECT mode — used by `big_res`
+so a dense residential lot blends with the green-roofed suburban houses around it
+instead of reading as a sand-colored box. Pieces are tagged `wall`/`roof`/`trim`
+via `instance(..., grp=)`.
+
+Piece facings are measured from the GLBs: window/door/awning detail and the
+border-side parapet lip face `-Y` at rotation 0 (map `{-Y:0,+X:90,+Y:180,-X:270}`);
+corner pieces' feature faces the `+X,-Y` diagonal at rotation 0 (see `CORNER_RZ`).
+It **merges** into `tools/spriteMap.json` so the City Kit zone art is preserved.
+Edit the `CIVIC` / `BIG` spec lists at the bottom of the script to add buildings
+or change which modules each uses.
 
 ### 2. CC0 isometric pack (fast drop-in)
 

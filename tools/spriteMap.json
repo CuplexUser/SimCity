@@ -1931,8 +1931,8 @@
     "key": "b:4",
     "footW": 2,
     "footH": 2,
-    "anchorX": 168,
-    "anchorY": 200,
+    "anchorX": 170,
+    "anchorY": 203,
     "tilePx": 136
   },
   "civic_hospital.png": {
@@ -1940,7 +1940,7 @@
     "footW": 2,
     "footH": 2,
     "anchorX": 149,
-    "anchorY": 149,
+    "anchorY": 146,
     "tilePx": 136
   },
   "civic_school.png": {
@@ -1948,7 +1948,7 @@
     "footW": 2,
     "footH": 2,
     "anchorX": 148,
-    "anchorY": 108,
+    "anchorY": 110,
     "tilePx": 136
   },
   "civic_library.png": {
@@ -1964,7 +1964,7 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 218,
+    "anchorY": 217,
     "tilePx": 136
   },
   "big_res_r1.png": {
@@ -1972,7 +1972,7 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 218,
+    "anchorY": 217,
     "tilePx": 136
   },
   "big_res_r2.png": {
@@ -1980,7 +1980,7 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 218,
+    "anchorY": 217,
     "tilePx": 136
   },
   "big_res_r3.png": {
@@ -1988,39 +1988,39 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 218,
+    "anchorY": 217,
     "tilePx": 136
   },
   "big_com_r0.png": {
     "key": "z:2:2:5:r0",
     "footW": 3,
     "footH": 3,
-    "anchorX": 312,
-    "anchorY": 413,
+    "anchorX": 321,
+    "anchorY": 431,
     "tilePx": 136
   },
   "big_com_r1.png": {
     "key": "z:2:2:5:r1",
     "footW": 3,
     "footH": 3,
-    "anchorX": 312,
-    "anchorY": 413,
+    "anchorX": 321,
+    "anchorY": 431,
     "tilePx": 136
   },
   "big_com_r2.png": {
     "key": "z:2:2:5:r2",
     "footW": 3,
     "footH": 3,
-    "anchorX": 312,
-    "anchorY": 413,
+    "anchorX": 321,
+    "anchorY": 431,
     "tilePx": 136
   },
   "big_com_r3.png": {
     "key": "z:2:2:5:r3",
     "footW": 3,
     "footH": 3,
-    "anchorX": 312,
-    "anchorY": 413,
+    "anchorX": 321,
+    "anchorY": 431,
     "tilePx": 136
   },
   "big_ind_r0.png": {
@@ -2028,7 +2028,7 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 177,
+    "anchorY": 183,
     "tilePx": 136
   },
   "big_ind_r1.png": {
@@ -2036,7 +2036,7 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 177,
+    "anchorY": 183,
     "tilePx": 136
   },
   "big_ind_r2.png": {
@@ -2044,7 +2044,7 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 177,
+    "anchorY": 183,
     "tilePx": 136
   },
   "big_ind_r3.png": {
@@ -2052,7 +2052,7 @@
     "footW": 3,
     "footH": 3,
     "anchorX": 224,
-    "anchorY": 177,
+    "anchorY": 183,
     "tilePx": 136
   }
 }

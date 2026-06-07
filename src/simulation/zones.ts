@@ -50,7 +50,7 @@ export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer
       if (!(demand && tile.density < 8 && tile.powered && hasRoadAccess(world, col, row))) return
 
       // First development on a vacant plot may claim a multi-tile lot from
-      // contiguous same-zone vacant neighbours (only when art sizes are known).
+      // contiguous same-zone vacant neighbors (only when art sizes are known).
       if (tile.density === 0 && lotSizer) {
         const size = chooseLotSize(world, col, row, tile.zone, lotSizer)
         if (size > 1) {

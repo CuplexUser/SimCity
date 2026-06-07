@@ -152,7 +152,7 @@ describe('stepZones', () => {
     expect(covered.zone).toBe(Zone.None)
   })
 
-  it('without a lot sizer zones stay 1×1 (unchanged fallback behaviour)', () => {
+  it('without a lot sizer zones stay 1×1 (unchanged fallback behavior)', () => {
     const world = new World()
     for (let row = 5; row <= 6; row++) {
       for (let col = 5; col <= 6; col++) {

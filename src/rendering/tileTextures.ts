@@ -4,7 +4,7 @@
  *
  * Baking strategy:
  *  - Building textures: one per (zone, density) pair + one per specific building
- *  - Overlay textures:  one per (overlay bitmask, road-neighbour mask) pair
+ *  - Overlay textures:  one per (overlay bitmask, road-neighbor mask) pair
  *
  * Canvas sizes:
  *  - Building canvas: TILE_W × BLDG_CANVAS_H; tile apex at y = BLDG_APEX_Y
@@ -41,7 +41,7 @@ export function getOverlayKey(overlay: number, roadMask: number): string {
 
 function bakeBuilding(tile: Tile): Texture {
   const hw = TILE_W / 2, hh = TILE_H / 2
-  const cx = BLDG_CANVAS_W / 2  // 32 — centre of canvas
+  const cx = BLDG_CANVAS_W / 2  // 32 — center of canvas
   const cy = BLDG_APEX_Y        // 224 — tile apex Y in canvas-local coords
 
   const oc  = new OffscreenCanvas(BLDG_CANVAS_W, BLDG_CANVAS_H)

@@ -57,7 +57,7 @@ nginx serves `dist/` as a static SPA with `/index.html` fallback. SSL via Certbo
 ### Rendering (PixiJS v8 WebGL)
 - Isometric camera with pan, zoom, and elevation-aware click hit-testing
 - Single sortable `worldContainer`; painter's-algorithm via `zIndex = (col+row)*3 + layer`
-- Terrain: `PIXI.Graphics` solid-colour diamonds with per-tile hash colour variation
+- Terrain: `PIXI.Graphics` solid-color diamonds with per-tile hash color variation
 - Roads and buildings: `PIXI.Sprite` backed by textures pre-baked at startup in `tileTextures.ts` (~100 textures via OffscreenCanvas → ImageBitmap → PIXI.Texture)
 - Dirty-tile tracking: `world.dirty: Set<number>` drained each frame — only changed tiles rebuild
 - Minimap with dirty-flag bake, live viewport indicator, and click/drag navigation

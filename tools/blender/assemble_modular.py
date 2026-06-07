@@ -20,7 +20,7 @@ Geometry contract matches src/rendering/isoCamera.ts and import_kenney.py:
     1 tile = 64x32 px (2:1 dimetric). 1 blender unit = 1 tile.
     Camera ORTHO, azimuth 45 deg, elevation atan(0.5).
 Modules are a clean unit grid: every wall block is 1x1 in plan and FLOOR_H tall,
-centred at origin with base at z=0; windows face -Y by default.
+centered at origin with base at z=0; windows face -Y by default.
 """
 
 import bpy
@@ -115,20 +115,84 @@ def load_module(name):
     return tmpl.data
 
 
-def instance(name, x, y, z, rz_deg, objs):
+def instance(name, x, y, z, rz_deg, objs, grp='wall'):
     o = bpy.data.objects.new(f"{name}_i", load_module(name))
     o.location = (x, y, z)
     o.rotation_euler = (0.0, 0.0, math.radians(rz_deg))
+    o["grp"] = grp          # 'wall' | 'roof' | 'trim' — for the OBJECT-color palette path
     scene.collection.objects.link(o)
     objs.append(o)
     return o
 
 
+# ── Calibration offsets (degrees added to the DIR_RZ facing for each piece
+# family — set empirically from a test render so the detailed side of a piece
+# faces outward / the parapet sits on the correct roof edge). ─────────────────
+# Measured from the GLBs (see _inspect_pieces.py): window/door/awning detail and
+# the border-side raised lip both face -Y at rz 0; the corner pieces' feature (the
+# L of roof-flat-border-corner, the windowed corner of building-corner-window)
+# faces the +X,-Y diagonal at rz 0. So all four families share rz 0 with no offset.
+WALL_OFF = 0
+CORNER_OFF = 0
+BORDER_OFF = 0
+BORDER_CORNER_OFF = 0
+
+# Outward diagonal a corner cell points at -> base z rotation (deg), derived from
+# the measured base feature diagonal (+X,-Y). Used for both the building-corner
+# wall pieces and the roof-flat-border-corner parapet so each feature points out.
+CORNER_RZ = {
+    frozenset(('+X', '-Y')): 0,
+    frozenset(('+X', '+Y')): 90,
+    frozenset(('-X', '+Y')): 180,
+    frozenset(('-X', '-Y')): 270,
+}
+
+
 # ── Building assembly ─────────────────────────────────────────────────────────
-def build(mw, md, floors, window="building-window", door=True, ac=False, tower=0):
+def _parapet_roof(mw, md, z, objs, style, details):
+    """Lay the roof at height z. style 'flat' = plain slabs (old look); 'parapet'
+    = raised border pieces on the edges/corners with slab infill, the look that
+    makes the Kenney kit read as a finished building. `details` is a list of
+    roof-flat-detail-* modules scattered on interior cells (vents/units)."""
+    interior = [(i, j) for i in range(1, mw - 1) for j in range(1, md - 1)]
+    detail_cells = {}
+    for k, c in enumerate(interior):
+        if details and k % 2 == 0:
+            detail_cells[c] = details[(k // 2) % len(details)]
+    for i in range(mw):
+        for j in range(md):
+            edges = []
+            if i == 0: edges.append('-X')
+            if i == mw - 1: edges.append('+X')
+            if j == 0: edges.append('-Y')
+            if j == md - 1: edges.append('+Y')
+            if style == 'flat' or not edges:
+                instance(detail_cells.get((i, j), "roof-flat-center"), i, j, z, 0, objs, grp='roof')
+            elif len(edges) == 1:
+                instance("roof-flat-border-side", i, j, z, DIR_RZ[edges[0]] + BORDER_OFF, objs, grp='roof')
+            else:
+                rz = CORNER_RZ.get(frozenset(edges[:2]), 0) + BORDER_CORNER_OFF
+                instance("roof-flat-border-corner", i, j, z, rz, objs, grp='roof')
+
+
+def build(mw, md, floors, *, wall="building-window", ground=None,
+          ground_front=None, corner=None, door="building-door", steps=None,
+          roof="parapet", details=(), ac=False, tower=0, tower_wall=None):
     """Assemble an mw x md (modules) building of `floors` floors. Returns objs.
-    `tower`>0 adds that many extra floors as a 2x2 turret at the NW corner for a
-    distinct silhouette (e.g. a fire station)."""
+
+    Walls are chosen per-cell so each building reads as a distinct service:
+      wall          upper-floor perimeter window module
+      ground        ground-floor perimeter window module (defaults to `wall`)
+      ground_front  ground-floor module for the front (-Y) row, e.g. a row of
+                    `building-door` engine bays for a fire station
+      corner        module for the four corner cells (e.g. round-top corners)
+      door          single entrance module at the front-center cell
+      steps         entrance stoop placed in front of the door (e.g. building-steps-wide)
+      roof          'parapet' (bordered, detailed) or 'flat' (plain slabs)
+      details       roof-flat-detail-* modules scattered on the roof interior
+      ac            add rooftop AC units
+      tower>0       extra floors as a watch tower at the NW corner (fire station)
+    """
     objs = []
     door_cell = (mw // 2, 0)
     for f in range(floors):
@@ -144,23 +208,35 @@ def build(mw, md, floors, window="building-window", door=True, ac=False, tower=0
                     continue  # interior is never seen (solid perimeter + roof)
                 # Prefer a camera-facing outward direction for the visible detail.
                 d = next((p for p in ('+X', '-Y', '+Y', '-X') if p in dirs), dirs[0])
-                mod = window
-                if f == 0 and door and (i, j) == door_cell and '-Y' in dirs:
-                    mod, d = "building-door", '-Y'
-                instance(mod, i, j, z, DIR_RZ[d], objs)
-    # Flat roof slab on top.
+                is_corner = len(dirs) >= 2
+                rz = DIR_RZ[d] + WALL_OFF
+                if f == 0 and ground_front and '-Y' in dirs:
+                    mod, rz = ground_front, DIR_RZ['-Y'] + WALL_OFF
+                elif f == 0 and (i, j) == door_cell and door and '-Y' in dirs:
+                    mod, rz = door, DIR_RZ['-Y'] + WALL_OFF
+                    if steps:
+                        instance(steps, i, j, 0.0, DIR_RZ['-Y'] + WALL_OFF, objs, grp='trim')
+                elif is_corner and corner:
+                    mod = corner
+                    rz = CORNER_RZ.get(frozenset(dirs[:2]), DIR_RZ[d]) + CORNER_OFF
+                elif f == 0 and ground:
+                    mod = ground
+                else:
+                    mod = wall
+                instance(mod, i, j, z, rz, objs)
+    # Roof.
     ztop = floors * FLOOR_H
-    for i in range(mw):
-        for j in range(md):
-            instance("roof-flat-center", i, j, ztop, 0, objs)
+    _parapet_roof(mw, md, ztop, objs, roof, details)
     if ac:
-        instance("detail-ac-a", mw / 2 - 0.5, md / 2 - 0.5, ztop + 0.106, 0, objs)
-        instance("detail-ac-b", mw / 2 + 0.5, md / 2 - 0.5, ztop + 0.106, 0, objs)
-    # Corner turret rising above the main roof (front-left cell, window to -Y).
+        instance("detail-ac-a", mw / 2 - 0.5, md / 2 - 0.5, ztop + 0.106, 0, objs, grp='trim')
+        instance("detail-ac-b", mw / 2 + 0.5, md / 2 - 0.5, ztop + 0.106, 0, objs, grp='trim')
+    # Watch tower rising above the main roof (front-left cell, window to -Y),
+    # capped with the kit's overhanging roof-flat-top for a distinct silhouette.
+    tw = tower_wall or wall
     for t in range(tower):
-        instance(window, 0, 0, (floors + t) * FLOOR_H, DIR_RZ['-Y'], objs)
+        instance(tw, 0, 0, (floors + t) * FLOOR_H, DIR_RZ['-Y'] + WALL_OFF, objs)
     if tower:
-        instance("roof-flat-center", 0, 0, (floors + tower) * FLOOR_H, 0, objs)
+        instance("roof-flat-top", 0, 0, (floors + tower) * FLOOR_H, 0, objs, grp='roof')
     return objs
 
 
@@ -185,7 +261,7 @@ def world_bbox(objs):
 
 def _tint_png(path, tint):
     """Multiply the RGB of a rendered PNG by `tint` (keeps alpha) so each civic
-    building reads as a distinct colour despite the kit's single beige texture.
+    building reads as a distinct color despite the kit's single beige texture.
     Done in Blender's linear pixel space, which is the right space for a tint."""
     img = bpy.data.images.load(path, check_existing=False)
     n = len(img.pixels)
@@ -202,7 +278,24 @@ def _tint_png(path, tint):
     bpy.data.images.remove(img)
 
 
-def _render_current(objs, fname, foot, tint=None):
+def apply_palette(objs, pal):
+    """Give each object a flat viewport color by its 'grp' tag, so a building can
+    be rendered with gray walls + a green roof (matching the Kenney Suburban City
+    Kit) instead of one uniform texture tint. Colors are sRGB-ish 0..1."""
+    default = pal.get('wall', (0.8, 0.8, 0.8))
+    for o in objs:
+        c = pal.get(o.get("grp", 'wall'), default)
+        o.color = (c[0], c[1], c[2], 1.0)
+
+
+def _render_current(objs, fname, foot, tint=None, palette=None):
+    # A palette renders flat per-object colors (Workbench OBJECT mode) instead of
+    # the kit texture + post-tint, so walls and roof can differ.
+    if palette is not None:
+        apply_palette(objs, palette)
+        scene.display.shading.color_type = 'OBJECT'
+    else:
+        scene.display.shading.color_type = 'TEXTURE'
     mn, mx = world_bbox(objs)
     corners = [Vector((x, y, z)) for x in (mn.x, mx.x) for y in (mn.y, mx.y) for z in (mn.z, mx.z)]
     corners += [Vector((0, 0, 0)), Vector((1, 0, 0)), Vector((1, 1, 0)), Vector((0, 1, 0))]
@@ -226,7 +319,7 @@ def _render_current(objs, fname, foot, tint=None):
     scene.render.filepath = out_path
     bpy.ops.render.render(write_still=True)
 
-    if tint is not None:
+    if tint is not None and palette is None:
         _tint_png(out_path, tint)
 
     def px(p):
@@ -242,7 +335,7 @@ def _render_current(objs, fname, foot, tint=None):
 
 
 def fit_footprint(objs, foot):
-    """Uniform-scale the assembly so its plan spans `foot` tiles, centre it in
+    """Uniform-scale the assembly so its plan spans `foot` tiles, center it in
     the [0,foot]^2 cell sitting on the ground."""
     # Force a depsgraph update so freshly-created instances report a current
     # matrix_world. Without this, a building whose modules were all cached (no
@@ -262,17 +355,17 @@ def fit_footprint(objs, foot):
     bpy.context.view_layer.update()
 
 
-def render_static(objs, foot, key, name, tint=None):
+def render_static(objs, foot, key, name, tint=None, palette=None):
     """Single render (no rotations) → one spriteMap entry. For civic b: keys."""
     fit_footprint(objs, foot)
     fname = f"{name}"
-    ax, ay, tile_px = _render_current(objs, fname, foot, tint=tint)
+    ax, ay, tile_px = _render_current(objs, fname, foot, tint=tint, palette=palette)
     return [(fname + ".png", {"key": key, "footW": foot, "footH": foot,
                               "anchorX": ax, "anchorY": ay, "tilePx": tile_px})]
 
 
-def render_rotations(objs, foot, key_base, name, tint=None):
-    """4 rotations about the plot centre → 4 spriteMap entries. For z: keys."""
+def render_rotations(objs, foot, key_base, name, tint=None, palette=None):
+    """4 rotations about the plot center → 4 spriteMap entries. For z: keys."""
     fit_footprint(objs, foot)
     pivot = bpy.data.objects.new("pivot", None)
     pivot.location = (foot / 2, foot / 2, 0.0)
@@ -286,7 +379,7 @@ def render_rotations(objs, foot, key_base, name, tint=None):
         pivot.rotation_euler = (0.0, 0.0, math.radians(90 * rot))
         bpy.context.view_layer.update()
         fname = f"{name}_r{rot}"
-        ax, ay, tile_px = _render_current(objs, fname, foot, tint=tint)
+        ax, ay, tile_px = _render_current(objs, fname, foot, tint=tint, palette=palette)
         out.append((fname + ".png", {"key": f"{key_base}:r{rot}", "footW": foot, "footH": foot,
                                      "anchorX": ax, "anchorY": ay, "tilePx": tile_px}))
     bpy.data.objects.remove(pivot, do_unlink=True)
@@ -295,20 +388,65 @@ def render_rotations(objs, foot, key_base, name, tint=None):
 
 # ── Specs ─────────────────────────────────────────────────────────────────────
 # Civic buildings. The Modular kit has one beige texture, so each gets a distinct
-# colour tint (multiplied over the render) plus a distinct silhouette so they read
-# as different services. (enum, name, mw, md, floors, foot, ac, tower, tint)
+# color tint (multiplied over the render). Beyond tint, each uses a different
+# mix of the kit's modules (window styles, awnings, balconies, round-top corners,
+# entrance steps, bordered/detailed roofs, a watch tower) so they read as clearly
+# different services rather than recolored boxes.
+# (enum, name, foot, build-kwargs, tint)
 CIVIC = [
-    (3, "civic_police",   3, 3, 3, 2, False, 0, (0.62, 0.72, 1.05)),  # blue
-    (4, "civic_fire",     3, 3, 2, 2, False, 3, (1.20, 0.52, 0.45)),  # red + watch tower
-    (5, "civic_hospital", 4, 4, 4, 2, True,  0, (1.08, 1.08, 1.12)),  # clean white, tallest
-    (6, "civic_school",   4, 3, 2, 2, False, 0, (1.10, 0.90, 0.55)),  # warm tan, wide & low
-    (7, "civic_library",  3, 3, 3, 2, False, 0, (0.70, 1.00, 0.72)),  # green
+    (3, "civic_police", 2, dict(
+        mw=3, md=3, floors=3, wall="building-window-large",
+        ground="building-window", corner="building-corner-window",
+        steps="building-steps-wide",
+        details=("roof-flat-detail-a", "roof-flat-detail-c")),
+        (0.62, 0.72, 1.05)),                                    # solid blue precinct
+    (4, "civic_fire", 2, dict(
+        mw=3, md=3, floors=2, wall="building-window",
+        ground_front="building-door", corner="building-corner",
+        details=("roof-flat-detail-b",), tower=3),
+        (1.20, 0.52, 0.45)),                                    # red, engine bays + watch tower
+    (5, "civic_hospital", 2, dict(
+        mw=4, md=4, floors=4, wall="building-window",
+        ground="building-window-awnings", corner="building-corner-window",
+        steps="building-steps-wide", ac=True,
+        details=("roof-flat-detail-a", "roof-flat-detail-b", "roof-flat-detail-d")),
+        (1.08, 1.08, 1.12)),                                    # tall, clean white, rooftop plant
+    (6, "civic_school", 2, dict(
+        mw=4, md=3, floors=2, wall="building-windows-round",
+        ground="building-window-awnings",
+        corner="building-corner-window-top-round", steps="building-steps-wide",
+        details=("roof-flat-detail-c",)),
+        (1.10, 0.90, 0.55)),                                    # wide, warm tan, arched windows
+    (7, "civic_library", 2, dict(
+        mw=3, md=3, floors=3, wall="building-windows-round",
+        ground="building-window-large",
+        corner="building-corner-window-top-round", steps="building-steps-wide",
+        details=("roof-flat-detail-a", "roof-flat-corner-high")),
+        (0.70, 1.00, 0.72)),                                    # green, classical arched look
 ]
-# Big zone lots: (zone, bucket, variant, name, mw, md, floors, foot, tint)
+# Big zone lots: (zone, bucket, variant, name, foot, build-kwargs, tint, palette)
+# A `palette` (gray walls + green roof) renders flat per-group colors so the lot
+# matches the Kenney Suburban City Kit houses instead of a warm texture tint.
+RES_PALETTE = {
+    'wall': (0.80, 0.82, 0.84),   # light cool gray, like the suburban house walls
+    'roof': (0.16, 0.42, 0.26),   # forest green, like the suburban gable roofs
+    'trim': (0.40, 0.42, 0.44),   # mid gray for door / balcony / details
+}
 BIG = [
-    (1, 2, 0, "big_res",  3, 3, 3, 3, (1.05, 0.92, 0.78)),  # residential — warm
-    (2, 2, 5, "big_com",  3, 3, 7, 3, (0.70, 0.85, 1.10)),  # commercial — blue glass
-    (3, 2, 6, "big_ind",  4, 4, 2, 3, (0.96, 0.90, 0.80)),  # industrial — drab grey
+    (1, 2, 0, "big_res", 3, dict(
+        mw=3, md=3, floors=3, wall="building-window",
+        ground="building-window-balcony", corner="building-corner",
+        details=("roof-flat-detail-c",)),
+        None, RES_PALETTE),                                     # residential — gray walls, green roof
+    (2, 2, 5, "big_com", 3, dict(
+        mw=3, md=3, floors=7, wall="building-window-large",
+        corner="building-corner-window", ac=True,
+        details=("roof-flat-detail-a", "roof-flat-detail-b")),
+        (0.70, 0.85, 1.10), None),                              # commercial — blue glass tower
+    (3, 2, 6, "big_ind", 3, dict(
+        mw=4, md=4, floors=2, wall="building-window", ac=True,
+        details=("roof-flat-detail-d",)),
+        (0.96, 0.90, 0.80), None),                              # industrial — drab, rooftop plant
 ]
 
 
@@ -319,17 +457,17 @@ def main():
             sprite_map = json.load(f)
 
     summary = []
-    for enum, name, mw, md, floors, foot, ac, tower, tint in CIVIC:
-        objs = build(mw, md, floors, ac=ac, tower=tower)
+    for enum, name, foot, kw, tint in CIVIC:
+        objs = build(**kw)
         for png, entry in render_static(objs, foot, f"b:{enum}", name, tint=tint):
             sprite_map[png] = entry
         clear_objs(objs)
         summary.append((f"b:{enum}", name, foot))
 
-    for zone, bucket, variant, name, mw, md, floors, foot, tint in BIG:
-        objs = build(mw, md, floors)
+    for zone, bucket, variant, name, foot, kw, tint, palette in BIG:
+        objs = build(**kw)
         kb = f"z:{zone}:{bucket}:{variant}"
-        for png, entry in render_rotations(objs, foot, kb, name, tint=tint):
+        for png, entry in render_rotations(objs, foot, kb, name, tint=tint, palette=palette):
             sprite_map[png] = entry
         clear_objs(objs)
         summary.append((kb, name, foot))

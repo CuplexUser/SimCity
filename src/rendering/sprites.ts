@@ -86,7 +86,7 @@ const WATER_NOISE  = createNoise2D(seededRandom(4814))
 const DIRT_NOISE   = createNoise2D(seededRandom(5423))
 const FOREST_NOISE = createNoise2D(seededRandom(6037))
 
-// ── Per-pixel terrain colour ───────────────────────────────────────────────────
+// ── Per-pixel terrain color ───────────────────────────────────────────────────
 
 function terrainTone(
   terrain: Terrain, x: number, y: number, zoom: number, col: number, row: number,

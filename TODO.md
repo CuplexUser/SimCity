@@ -48,10 +48,10 @@
 - [ ] Blender-rendered isometric building sprites — R/C/I at each density stage
 - [ ] Blender-rendered infrastructure sprites — roads with sidewalk/lane markings, power pylons
 - [ ] Sprite atlases packed per zoom level (2×, 4×) — hot-swap via `bakeAllTextures()` key
-- [x] Proper terrain texture — Water/Dirt/Forest use per-pixel noise sprites; Grass retains per-tile colour variation
+- [x] Proper terrain texture — Water/Dirt/Forest use per-pixel noise sprites; Grass retains per-tile color variation
 - [x] Animated water tiles — shimmer via per-frame tint oscillation on Water terrain sprites
 - [x] Tile hover highlight — white outline + tint overlay, redrawn on mousemove without full redraw
-- [x] Zone colour overlay — semi-transparent fill toggle (View panel / V key); outlines always visible on vacant zones
+- [x] Zone color overlay — semi-transparent fill toggle (View panel / V key); outlines always visible on vacant zones
 - [x] Night mode — dark blue screen overlay + warm amber tint on building sprites (N key / View panel)
 
 ## Phase 4 — Infrastructure depth
@@ -60,7 +60,7 @@
 - [ ] Metro (underground toggle view)
 - [ ] Highways
 - [ ] Bus depots
-- [ ] Road auto-connect — update neighbour road masks on placement
+- [ ] Road auto-connect — update neighbor road masks on placement
 - [ ] Drag-to-zone rectangular selection
 
 ## Phase 5 — Economy depth

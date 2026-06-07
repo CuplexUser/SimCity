@@ -18,7 +18,7 @@ Major visual-upgrade slice: buildings now render from a **sprite atlas resource 
 - `rendering/renderer.ts`: loads atlas in `_init`; `_rebuildBuilding` draws one sprite at the footprint origin (atlas `SpriteMeta` anchor/scale, or procedural fallback), z-ordered by the plot's front tile; covered tiles draw nothing; footprint-aware dirty expansion; deterministic per-lot variant pick; hover highlight shows the whole footprint; `zoneLotSizes()` exposes art-backed lot sizes.
 - `data/buildings.ts`: `BUILDING_FOOTPRINT` table (Coal/Nuclear 4×4, Police/Fire/Hospital/School 3×3, etc.).
 - `main.tsx`: plop placement uses `canPlaceFootprint`/`placeFootprint` (cost once); hover passes the active building's footprint.
-- `simulation/zones.ts`: optional `LotSizer` forms multi-tile lots from contiguous same-zone vacant tiles (only sizes with art); population scales by lot area; origin-only counting. Without a `LotSizer` (no atlas), behaviour is identical to before.
+- `simulation/zones.ts`: optional `LotSizer` forms multi-tile lots from contiguous same-zone vacant tiles (only sizes with art); population scales by lot area; origin-only counting. Without a `LotSizer` (no atlas), behavior is identical to before.
 - `simulation/simManager.ts` + `core/engine.ts`: wire `Renderer.zoneLotSizes()` → `SimManager.setLotSizer()` after init.
 
 **Layer 4 — asset pipeline (`tools/`)**

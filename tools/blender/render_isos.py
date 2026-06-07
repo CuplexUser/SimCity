@@ -80,7 +80,7 @@ def render_object(obj, cam):
     foot_w = max(1, math.ceil(max_x - 1e-4))
     foot_h = max(1, math.ceil(max_y - 1e-4))
 
-    # Fit ortho so the plot + height are framed; aim the camera at the plot centre.
+    # Fit ortho so the plot + height are framed; aim the camera at the plot center.
     target = Vector((foot_w / 2, foot_h / 2, 0))
     cam.location = target + Vector((10, -10, 10))  # along the SW->NE diagonal
     span = max(foot_w + foot_h, 4)

@@ -20,7 +20,7 @@ export class Engine {
     this.camera = new IsoCamera()
     this.sim    = new SimManager(this.world)
 
-    // Centre the view on the middle of the world
+    // Center the view on the middle of the world
     const midTile    = WORLD_COLS / 2
     this.camera.panX = canvas.width  / 2
     this.camera.panY = canvas.height / 2 - midTile * 2 * (TILE_H / 2)

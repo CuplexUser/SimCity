@@ -495,7 +495,7 @@ export function drawZoneBuilding(
         ctx.closePath(); ctx.fill()
       }
 
-      // Coloured awning (fold-out, south face top strip)
+      // Colored awning (fold-out, south face top strip)
       {
         const awH  = h * 0.18
         const awCol = density === 1 ? '#cc3322' : '#2244aa'
@@ -542,7 +542,7 @@ export function drawZoneBuilding(
       const s = 0.70, h = hh * 4.2
       const floors = 5
 
-      // Blue-grey facade
+      // Blue-gray facade
       drawIsoBox(ctx, cx, cy, hw, hh, s, h, '#b0bec8', '#607888', '#788898')
       drawFloorLines(ctx, cx, cy, hw, hh, s, h, floors, 'rgba(180,210,240,0.25)')
 
@@ -611,7 +611,7 @@ export function drawZoneBuilding(
     if (bucket === 0) {
       // ── Small warehouse / workshop ─────────────────────────────────────────
       const s = 0.82, h = hh * 1.6
-      // Metal cladding: grey-green
+      // Metal cladding: gray-green
       const wallS = '#787870', wallW = '#585850', wallT = '#909088'
       drawIsoBox(ctx, cx, cy, hw, hh, s, h, wallT, wallS, wallW)
       // Corrugated metal lines
@@ -744,17 +744,17 @@ export function drawRoadTile(
   ctx.moveTo(cx - hw * 0.5, cy + hh * 0.5); ctx.lineTo(cx - hw * 0.5, cy + hh * 1.5); ctx.stroke()
 
   // ── Asphalt ─────────────────────────────────────────────────────────────────
-  // Built from a centre core plus one "arm" reaching out to each connected edge,
-  // so neighbouring road tiles fuse into a continuous carriageway. Each tile edge
-  // midpoint (where two tiles meet) lies at centre ± (hw/2, ±hh/2); an arm is the
-  // parallelogram from the centre out to that midpoint, `RW` wide along the other
+  // Built from a center core plus one "arm" reaching out to each connected edge,
+  // so neighboring road tiles fuse into a continuous carriageway. Each tile edge
+  // midpoint (where two tiles meet) lies at center ± (hw/2, ±hh/2); an arm is the
+  // parallelogram from the center out to that midpoint, `RW` wide along the other
   // tile axis. RW is the fraction of the shared edge the asphalt occupies, so the
   // remainder shows through as sidewalk fringe.
-  const ccx = cx, ccy = cy + hh   // diamond centre
-  const ex = hw / 2, ey = hh / 2  // centre → edge-midpoint half-vector
+  const ccx = cx, ccy = cy + hh   // diamond center
+  const ex = hw / 2, ey = hh / 2  // center → edge-midpoint half-vector
   const RW = 0.58                 // road half-width (fraction of an edge)
 
-  // bit, arm vector (centre→edge midpoint), perpendicular = the other tile axis
+  // bit, arm vector (center→edge midpoint), perpendicular = the other tile axis
   const arms = [
     { bit: 1, ax:  ex, ay: -ey, px:  ex, py:  ey }, // N → upper-right edge
     { bit: 2, ax:  ex, ay:  ey, px:  ex, py: -ey }, // E → lower-right edge
@@ -768,7 +768,7 @@ export function drawRoadTile(
 
   ctx.fillStyle = '#484848'
 
-  // Centre core (tile-aligned diamond) — solid junction core + isolated-tile patch
+  // Center core (tile-aligned diamond) — solid junction core + isolated-tile patch
   ctx.beginPath()
   ctx.moveTo(ccx,          ccy - ey * RW)
   ctx.lineTo(ccx + ex * RW, ccy)
@@ -776,7 +776,7 @@ export function drawRoadTile(
   ctx.lineTo(ccx - ex * RW, ccy)
   ctx.closePath(); ctx.fill()
 
-  // Arms to each connected neighbour
+  // Arms to each connected neighbor
   for (const a of arms) {
     if (!(mask & a.bit)) continue
     const wx = a.px * RW, wy = a.py * RW
@@ -790,7 +790,7 @@ export function drawRoadTile(
 
   // ── Lane markings ─────────────────────────────────────────────────────────
   if (connCount <= 2) {
-    // Straight / corner / dead-end: dashed yellow centre line along each arm
+    // Straight / corner / dead-end: dashed yellow center line along each arm
     const dashL = Math.max(2, hw * 0.10)
     const gapL  = Math.max(2, hw * 0.08)
     ctx.strokeStyle = '#ffee22'
@@ -871,7 +871,7 @@ export function drawBuilding(
   switch (building) {
 
     case Building.PowerPlant: {
-      // Coal plant: large grey complex with two tall stacks
+      // Coal plant: large gray complex with two tall stacks
       drawIsoBox(ctx, cx, cy, hw, hh, 0.84, hh * 2.0, '#5a5a5a', '#363636', '#484848')
       drawIsoBox(ctx, cx + hw * 0.18, cy + hh * 0.05, hw, hh, 0.38, hh * 1.4, '#636363', '#404040', '#525252')
       // Stacks with bands

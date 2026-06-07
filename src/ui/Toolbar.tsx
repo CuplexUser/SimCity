@@ -239,7 +239,7 @@ export function Toolbar({
     if (openCat === 'doze')     return DOZE_BTNS.map(toolBtn)
     if (openCat === 'view') return [
       toggleBtn('Night Mode',     nightMode,       onNightMode,     'Toggle night mode [N]'),
-      toggleBtn('Zone Overlay',   showZoneOverlay, onZoneOverlay,   'Show zone colour overlay [V]'),
+      toggleBtn('Zone Overlay',   showZoneOverlay, onZoneOverlay,   'Show zone color overlay [V]'),
     ]
     return null
   }
