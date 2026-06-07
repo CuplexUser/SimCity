@@ -2182,5 +2182,61 @@
     "anchorX": 128,
     "anchorY": 150,
     "tilePx": 210
+  },
+  "infra_coal.png": {
+    "key": "b:1",
+    "footW": 4,
+    "footH": 4,
+    "anchorX": 315,
+    "anchorY": 343,
+    "tilePx": 136
+  },
+  "infra_gas.png": {
+    "key": "b:8",
+    "footW": 3,
+    "footH": 3,
+    "anchorX": 223,
+    "anchorY": 224,
+    "tilePx": 136
+  },
+  "infra_nuclear.png": {
+    "key": "b:9",
+    "footW": 4,
+    "footH": 4,
+    "anchorX": 298,
+    "anchorY": 310,
+    "tilePx": 136
+  },
+  "infra_solar.png": {
+    "key": "b:10",
+    "footW": 3,
+    "footH": 3,
+    "anchorX": 224,
+    "anchorY": 158,
+    "tilePx": 136
+  },
+  "infra_wind.png": {
+    "key": "b:11",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 130,
+    "anchorY": 188,
+    "tilePx": 136
+  },
+  "infra_water.png": {
+    "key": "b:2",
+    "footW": 2,
+    "footH": 2,
+    "anchorX": 232,
+    "anchorY": 322,
+    "tilePx": 136
+  },
+  "infra_pylon.png": {
+    "key": "infra:pylon",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 128,
+    "anchorY": 181,
+    "tilePx": 141
   }
 }

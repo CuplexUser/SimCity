@@ -11,7 +11,11 @@ export default defineConfig({
   // run, occasionally tipping a heavy test over its timeout; one local retry (two
   // in CI) absorbs that environmental flakiness without masking real failures.
   retries: process.env.CI ? 2 : 1,
-  workers: process.env.CI ? 1 : undefined,
+  // Each worker spawns its own software-rendered (SwiftShader) Chrome, which is
+  // very heavy. Letting Playwright default to ~half the CPU cores locally spins
+  // up many at once and bogs the machine down — and the contention then *causes*
+  // timeouts. Run serially by default; override with `PW_WORKERS=N` if desired.
+  workers: process.env.CI ? 1 : Number(process.env.PW_WORKERS) || 1,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],
   outputDir: 'test-results/playwright',
   use: {

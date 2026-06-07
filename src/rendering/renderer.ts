@@ -93,6 +93,7 @@ export class Renderer {
   private terrainSprites:  (Sprite   | null)[]   // noise texture (Water/Dirt/Forest only)
   private overlaySprites:  (Sprite   | null)[]
   private overlayMask:     Int8Array            // road mask baked into each overlay sprite (-1 = none); debug/test signal
+  private pylonSprites:    (Sprite   | null)[]   // Blender transmission-pylon sprite on power-line tiles (atlas only)
   private buildingSprites: (Sprite   | null)[]
 
   // Shared texture cache for building/overlay textures (~100 textures)
@@ -139,6 +140,7 @@ export class Renderer {
     this.terrainSprites  = new Array(n).fill(null)
     this.overlaySprites  = new Array(n).fill(null)
     this.overlayMask     = new Int8Array(n).fill(-1)
+    this.pylonSprites    = new Array(n).fill(null)
     this.buildingSprites = new Array(n).fill(null)
   }
 
@@ -467,10 +469,31 @@ export class Renderer {
     const idx = this._idx(col, row)
     const old = this.overlaySprites[idx]
     if (old) { this.worldContainer.removeChild(old); old.destroy({ texture: false }); this.overlaySprites[idx] = null }
+    const oldPylon = this.pylonSprites[idx]
+    if (oldPylon) { this.worldContainer.removeChild(oldPylon); oldPylon.destroy({ texture: false }); this.pylonSprites[idx] = null }
     this.overlayMask[idx] = -1
 
     const tile = this.world.get(col, row)
     if (!tile.overlay) return
+
+    // Blender transmission pylon on power-line tiles (atlas only). The procedural
+    // wire overlay below still draws the connecting line; the pylon is a tall
+    // sprite on the building layer so it reads as 3D infrastructure. Skip on tiles
+    // that already carry a building/lot sprite so the two don't overlap.
+    if ((tile.overlay & Overlay.PowerLine) && tile.building === Building.None && tile.density === 0) {
+      const meta = this.atlas.meta.get('infra:pylon')
+      if (meta) {
+        const p = new Sprite(meta.texture)
+        p.anchor.set(meta.anchorX / meta.frameW, meta.anchorY / meta.frameH)
+        p.scale.set(meta.scale)
+        p.x      = (col - row) * BASE_HW
+        p.y      = (col + row) * BASE_HH - tile.elevation * BASE_EH
+        p.zIndex = (col + row) * 3 + 2
+        if (this._nightMode) p.tint = 0xffcc77
+        this.pylonSprites[idx] = p
+        this.worldContainer.addChild(p)
+      }
+    }
 
     const mask = (tile.overlay & Overlay.Road) ? this._roadMask(col, row) : 0
     if (tile.overlay & Overlay.Road) this.overlayMask[idx] = mask
@@ -485,6 +508,16 @@ export class Renderer {
 
     this.overlaySprites[idx] = sprite
     this.worldContainer.addChild(sprite)
+  }
+
+  /** Test/debug: whether a Blender pylon sprite is currently drawn at this tile. */
+  hasPylon(col: number, row: number): boolean {
+    return this.pylonSprites[this._idx(col, row)] != null
+  }
+
+  /** Test/debug: whether a building/lot sprite is currently drawn at this tile. */
+  hasBuildingSprite(col: number, row: number): boolean {
+    return this.buildingSprites[this._idx(col, row)] != null
   }
 
   // ── Building sprites ─────────────────────────────────────────────────────
@@ -700,6 +733,7 @@ export class Renderer {
   private _applyNightTintToBuildings(on: boolean): void {
     const tint = on ? 0xffcc77 : 0xffffff
     for (const s of this.buildingSprites) { if (s) s.tint = tint }
+    for (const s of this.pylonSprites) { if (s) s.tint = tint }
   }
 
   // ── Minimap ──────────────────────────────────────────────────────────────

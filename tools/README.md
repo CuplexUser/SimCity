@@ -111,6 +111,18 @@ so a dense residential lot blends with the green-roofed suburban houses around i
 instead of reading as a sand-colored box. Pieces are tagged `wall`/`roof`/`trim`
 via `instance(..., grp=)`.
 
+The same script also renders **infrastructure** that no Kenney kit models, built
+from Blender mesh **primitives** (`box`/`cyl`/`cone`/`dome`, coordinates in tile
+units; `fit_footprint` normalizes each to its plot). Primitives set their own
+`o.color`, rendered flat via `palette='keep'` (Workbench OBJECT mode, no recolor):
+- Power plants + water tower keyed `b:{enum}` — coal (powerhouse + banded stacks +
+  fuel tanks), gas turbine, nuclear (cooling tower + domed containment), solar
+  farm (tilted panel rows), wind turbine, water tower (braced tank) — replacing
+  the procedural fallback for those.
+- A transmission **pylon** keyed `infra:pylon` (1×1 steel lattice + cross-arms +
+  insulators). The renderer draws it on every power-line tile, on the building
+  layer above the procedural connecting wire (`renderer.ts` `_rebuildOverlay`).
+
 Piece facings are measured from the GLBs: window/door/awning detail and the
 border-side parapet lip face `-Y` at rotation 0 (map `{-Y:0,+X:90,+Y:180,-X:270}`);
 corner pieces' feature faces the `+X,-Y` diagonal at rotation 0 (see `CORNER_RZ`).
@@ -136,7 +148,7 @@ angle is ~2:1 dimetric so they sit flat on the grid.
 | `spriteMap.json` | Source-PNG → atlas-key mapping (illustrative entries included). |
 | `blender/render_isos.py` | Headless Blender batch renderer at the in-game iso angle (for custom `.blend` art). |
 | `blender/import_kenney.py` | Headless Blender: import Kenney `.glb` kits → re-origin → render → write PNGs + spriteMap.json. |
-| `blender/assemble_modular.py` | Headless Blender: assemble Kenney Modular Buildings pieces → civic (`b:`) + 3×3 zone buildings → merge spriteMap.json. |
+| `blender/assemble_modular.py` | Headless Blender: assemble Kenney Modular Buildings pieces → civic (`b:`) + 3×3 zone buildings, plus primitive-built infrastructure (power plants/water tower `b:`, `infra:pylon`) → merge spriteMap.json. |
 | `blender/kenney_packs.json` | Maps each Kenney pack folder → zone + density-bucketing rule. |
 | `blender/README.md` | Blender camera/anchor math + modeling conventions. |
 
