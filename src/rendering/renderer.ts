@@ -93,8 +93,10 @@ export class Renderer {
   private terrainSprites:  (Sprite   | null)[]   // noise texture (Water/Dirt/Forest only)
   private overlaySprites:  (Sprite   | null)[]
   private overlayMask:     Int8Array            // road mask baked into each overlay sprite (-1 = none); debug/test signal
-  private pylonSprites:    (Sprite   | null)[]   // Blender transmission-pylon sprite on power-line tiles (atlas only)
+  private pylonSprites:    (Sprite   | null)[]   // Blender transmission-pylon sprite, spaced along power runs (atlas only)
+  private wireGfx:         (Graphics | null)[]   // catenary conductors spanning between power-line tiles
   private buildingSprites: (Sprite   | null)[]
+  private _powerArmH = 30   // screen px from tile apex up to the conductor attach height (from pylon meta)
 
   // Shared texture cache for building/overlay textures (~100 textures)
   private texCache!: TextureCache
@@ -141,6 +143,7 @@ export class Renderer {
     this.overlaySprites  = new Array(n).fill(null)
     this.overlayMask     = new Int8Array(n).fill(-1)
     this.pylonSprites    = new Array(n).fill(null)
+    this.wireGfx         = new Array(n).fill(null)
     this.buildingSprites = new Array(n).fill(null)
   }
 
@@ -181,6 +184,12 @@ export class Renderer {
 
     // Load the building sprite atlas if present (empty map → pure procedural fallback)
     this.atlas = await loadSpriteAtlas()
+
+    // Conductor attach height: the pylon sprite rises anchorY*scale px above the
+    // tile apex; its cross-arms sit near the top, so hang the wires at ~0.82 of
+    // that. Falls back to a fixed height when there's no pylon art.
+    const pylonMeta = this.atlas.meta.get('infra:pylon')
+    if (pylonMeta) this._powerArmH = pylonMeta.anchorY * pylonMeta.scale * 0.66
 
     // Pre-bake shared terrain textures for non-Grass types
     for (const t of [Terrain.Water, Terrain.Dirt, Terrain.Forest]) {
@@ -263,12 +272,13 @@ export class Renderer {
             dirtyIdxs.add(fr * world.cols + fc)
           }
         }
-        // Rebuild any road-bearing neighbor's overlay so connections fuse on
-        // placement AND retract on bulldoze. Keying off the neighbor (not this
-        // tile) covers removal, where this tile no longer has a road itself.
+        // Rebuild any road- or power-bearing neighbor's overlay so connections
+        // fuse on placement AND retract on bulldoze (road masks, power wires +
+        // pylon spacing). Keying off the neighbor (not this tile) covers removal,
+        // where this tile no longer carries the overlay itself.
         for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]] as const) {
           const nc = col + dc, nr = row + dr
-          if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.Road)) {
+          if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & (Overlay.Road | Overlay.PowerLine))) {
             overlayIdxs.add(nr * world.cols + nc)
           }
         }
@@ -471,43 +481,121 @@ export class Renderer {
     if (old) { this.worldContainer.removeChild(old); old.destroy({ texture: false }); this.overlaySprites[idx] = null }
     const oldPylon = this.pylonSprites[idx]
     if (oldPylon) { this.worldContainer.removeChild(oldPylon); oldPylon.destroy({ texture: false }); this.pylonSprites[idx] = null }
+    const oldWire = this.wireGfx[idx]
+    if (oldWire) { this.worldContainer.removeChild(oldWire); oldWire.destroy(); this.wireGfx[idx] = null }
     this.overlayMask[idx] = -1
 
     const tile = this.world.get(col, row)
     if (!tile.overlay) return
 
-    // Blender transmission pylon on power-line tiles (atlas only). The procedural
-    // wire overlay below still draws the connecting line; the pylon is a tall
-    // sprite on the building layer so it reads as 3D infrastructure. Skip on tiles
-    // that already carry a building/lot sprite so the two don't overlap.
-    if ((tile.overlay & Overlay.PowerLine) && tile.building === Building.None && tile.density === 0) {
-      const meta = this.atlas.meta.get('infra:pylon')
-      if (meta) {
-        const p = new Sprite(meta.texture)
-        p.anchor.set(meta.anchorX / meta.frameW, meta.anchorY / meta.frameH)
-        p.scale.set(meta.scale)
-        p.x      = (col - row) * BASE_HW
-        p.y      = (col + row) * BASE_HH - tile.elevation * BASE_EH
-        p.zIndex = (col + row) * 3 + 2
-        if (this._nightMode) p.tint = 0xffcc77
-        this.pylonSprites[idx] = p
-        this.worldContainer.addChild(p)
+    // ── Power lines: live conductors + spaced transmission pylons ────────────
+    // Wires are drawn to the connected E/S neighbors (each network edge owned by
+    // one tile) at a constant attach height, so adjacent half-spans meet into a
+    // continuous line. A pylon is plopped only periodically (corners, junctions,
+    // ends, every 3rd tile of a straight run) so runs don't read as a solid mesh.
+    if (tile.overlay & Overlay.PowerLine) {
+      const pmask = this._powerMask(col, row)
+      this._drawWires(idx, col, row, tile, pmask)
+      if (this._pylonAt(col, row, pmask) && tile.building === Building.None && tile.density === 0) {
+        this._placePylon(idx, col, row, tile, pmask)
       }
     }
 
-    const mask = (tile.overlay & Overlay.Road) ? this._roadMask(col, row) : 0
-    if (tile.overlay & Overlay.Road) this.overlayMask[idx] = mask
-    const tex  = this.texCache.get(getOverlayKey(tile.overlay, mask))
-    if (!tex) return
+    // ── Roads: baked tile texture keyed by neighbor mask ─────────────────────
+    if (tile.overlay & Overlay.Road) {
+      const mask = this._roadMask(col, row)
+      this.overlayMask[idx] = mask
+      const tex = this.texCache.get(getOverlayKey(Overlay.Road, mask))
+      if (tex) {
+        const sprite = new Sprite(tex)
+        sprite.anchor.set(0.5, 0)
+        sprite.x      = (col - row) * BASE_HW
+        sprite.y      = (col + row) * BASE_HH - tile.elevation * BASE_EH
+        sprite.zIndex = (col + row) * 3 + 1
+        this.overlaySprites[idx] = sprite
+        this.worldContainer.addChild(sprite)
+      }
+    }
+  }
 
-    const sprite = new Sprite(tex)
-    sprite.anchor.set(0.5, 0)
-    sprite.x      = (col - row) * BASE_HW
-    sprite.y      = (col + row) * BASE_HH - tile.elevation * BASE_EH
-    sprite.zIndex = (col + row) * 3 + 1
+  /** 4-bit mask of power-line neighbors: E=1, W=2, S=4, N=8. */
+  private _powerMask(col: number, row: number): number {
+    const w = this.world
+    const p = (c: number, r: number): number =>
+      w.inBounds(c, r) && (w.get(c, r).overlay & Overlay.PowerLine) ? 1 : 0
+    return p(col + 1, row) | (p(col - 1, row) << 1) | (p(col, row + 1) << 2) | (p(col, row - 1) << 3)
+  }
 
-    this.overlaySprites[idx] = sprite
-    this.worldContainer.addChild(sprite)
+  /** Whether this power tile gets a pylon: ends/junctions/corners always, plus
+   *  every 3rd tile of a straight run (so runs aren't a wall of pylons). */
+  private _pylonAt(col: number, row: number, pmask: number): boolean {
+    const E = !!(pmask & 1), W = !!(pmask & 2), S = !!(pmask & 4), N = !!(pmask & 8)
+    const count = (E ? 1 : 0) + (W ? 1 : 0) + (S ? 1 : 0) + (N ? 1 : 0)
+    if (count !== 2) return true                    // isolated, dead-end, junction
+    const straightCol = E && W, straightRow = S && N
+    if (!straightCol && !straightRow) return true   // corner (direction change)
+    return straightCol ? col % 3 === 0 : row % 3 === 0
+  }
+
+  /** Conductor attach point (screen space, at arm height) for a power tile. */
+  private _wireHub(col: number, row: number): { x: number; y: number } {
+    const t = this.world.get(col, row)
+    return {
+      x: (col - row) * BASE_HW,
+      y: (col + row) * BASE_HH - t.elevation * BASE_EH - this._powerArmH,
+    }
+  }
+
+  /** Draw the catenary conductors this tile owns (toward its E and S neighbors). */
+  private _drawWires(idx: number, col: number, row: number, tile: Tile, pmask: number): void {
+    const g = new Graphics()
+    g.zIndex = (col + row) * 3 + 2.5
+    const a = this._wireHub(col, row)
+
+    const span = (nc: number, nr: number): void => {
+      const b = this._wireHub(nc, nr)
+      const dx = b.x - a.x, dy = b.y - a.y
+      const len = Math.hypot(dx, dy) || 1
+      const ox = (-dy / len) * 3, oy = (dx / len) * 3   // perpendicular split
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 + 5   // mid-span sag
+      for (const s of [-1, 1]) {
+        g.moveTo(a.x + ox * s, a.y + oy * s)
+        g.quadraticCurveTo(mx + ox * s, my + oy * s, b.x + ox * s, b.y + oy * s)
+      }
+      g.stroke({ color: 0x111111, width: 1, alpha: 0.8 })
+    }
+    if (pmask & 1) span(col + 1, row)   // E edge
+    if (pmask & 4) span(col, row + 1)   // S edge
+
+    // No pylon art: draw a simple pole so power runs still read in the fallback.
+    if (!this.atlas.meta.get('infra:pylon') && this._pylonAt(col, row, pmask)) {
+      const baseY = (col + row) * BASE_HH - tile.elevation * BASE_EH + BASE_HH
+      g.moveTo(a.x, baseY).lineTo(a.x, a.y - 2).stroke({ color: 0x6a5a38, width: 2 })
+      g.moveTo(a.x - 10, a.y).lineTo(a.x + 10, a.y).stroke({ color: 0x6a5a38, width: 1.5 })
+    }
+
+    this.wireGfx[idx] = g
+    this.worldContainer.addChild(g)
+  }
+
+  /** Plop the Blender transmission pylon, re-aiming its cross-arms to the run. */
+  private _placePylon(idx: number, col: number, row: number, tile: Tile, pmask: number): void {
+    const meta = this.atlas.meta.get('infra:pylon')
+    if (!meta) return   // fallback pole is drawn in _drawWires
+    const p = new Sprite(meta.texture)
+    p.anchor.set(meta.anchorX / meta.frameW, meta.anchorY / meta.frameH)
+    p.scale.set(meta.scale)
+    // The pylon's cross-arms project along the col-axis diagonal, which already
+    // sits across an N–S (row-axis) run. For a straight E–W (col-axis) run the
+    // arms would run *along* the wire, so a horizontal flip re-aims them across it.
+    const E = !!(pmask & 1), W = !!(pmask & 2), S = !!(pmask & 4), N = !!(pmask & 8)
+    if (E && W && !(S || N)) p.scale.x = -meta.scale
+    p.x      = (col - row) * BASE_HW
+    p.y      = (col + row) * BASE_HH - tile.elevation * BASE_EH
+    p.zIndex = (col + row) * 3 + 2
+    if (this._nightMode) p.tint = 0xffcc77
+    this.pylonSprites[idx] = p
+    this.worldContainer.addChild(p)
   }
 
   /** Test/debug: whether a Blender pylon sprite is currently drawn at this tile. */

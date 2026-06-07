@@ -17,7 +17,7 @@
 import { Texture } from 'pixi.js'
 import { Zone, Overlay, Building, type Tile } from '../core/tile'
 import { TILE_W, TILE_H } from './isoCamera'
-import { drawZoneBuilding, drawBuilding, drawRoadTile, drawPowerLineTile } from './tileRenderer'
+import { drawZoneBuilding, drawBuilding, drawRoadTile } from './tileRenderer'
 
 // ── Canvas dimension constants ─────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ function bakeBuilding(tile: Tile): Texture {
   return Texture.from(oc.transferToImageBitmap())
 }
 
-function bakeOverlay(overlay: number, roadMask: number): Texture {
+function bakeRoadOverlay(roadMask: number): Texture {
   const hw = TILE_W / 2, hh = TILE_H / 2
   const cx = TILE_W / 2  // 32
   const cy = 0           // tile apex at top of canvas
@@ -64,8 +64,7 @@ function bakeOverlay(overlay: number, roadMask: number): Texture {
   const oc  = new OffscreenCanvas(TILE_W, TILE_H)
   const ctx = oc.getContext('2d')!
 
-  if (overlay & Overlay.Road)      drawRoadTile(ctx, cx, cy, hw, hh, roadMask, 1)
-  if (overlay & Overlay.PowerLine) drawPowerLineTile(ctx, cx, cy, hw, hh, 1)
+  drawRoadTile(ctx, cx, cy, hw, hh, roadMask, 1)
 
   return Texture.from(oc.transferToImageBitmap())
 }
@@ -98,11 +97,11 @@ export function bakeAllTextures(): TextureCache {
     cache.set(`b:${bldg}`, bakeBuilding(stub))
   }
 
-  // Overlays: overlay bitmask (1=road, 2=power, 3=both) × road-mask (0-15) = 48
-  for (const ov of [Overlay.Road, Overlay.PowerLine, Overlay.Road | Overlay.PowerLine]) {
-    for (let mask = 0; mask < 16; mask++) {
-      cache.set(getOverlayKey(ov, mask), bakeOverlay(ov, mask))
-    }
+  // Road overlays: road-neighbor mask (0-15) = 16 textures. Power lines are no
+  // longer baked per-tile — they render as live Graphics conductors plus spaced
+  // pylon sprites in renderer.ts, so wires span continuously between pylons.
+  for (let mask = 0; mask < 16; mask++) {
+    cache.set(getOverlayKey(Overlay.Road, mask), bakeRoadOverlay(mask))
   }
 
   return cache
