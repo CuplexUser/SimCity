@@ -101,7 +101,9 @@ export async function loadGameState(slot = 'autosave'): Promise<{ world: World; 
 const DEFAULT_SIM: SimState = { year: 2000, tick: 0, population: 0, funds: 20_000 }
 
 export function gameStateToJSON(world: World, sim: SimState): string {
-  return JSON.stringify(serializeGameState(world, sim), null, 2)
+  // Minified — gzip (see gameStateToBlob) removes the redundancy that pretty
+  // indentation would only inflate.
+  return JSON.stringify(serializeGameState(world, sim))
 }
 
 export function gameStateFromJSON(text: string): { world: World; sim: SimState } {
@@ -119,6 +121,40 @@ export function gameStateFromJSON(text: string): { world: World; sim: SimState }
   const world = deserializeWorld(save)
   const sim = save.sim ? { ...DEFAULT_SIM, ...save.sim } : { ...DEFAULT_SIM }
   return { world, sim }
+}
+
+// ── Compressed file export / import ──────────────────────────────────────────
+// The raw JSON is hugely redundant (one verbose tile object per RLE run), so a
+// 128×128 city is ~1.2 MB of text but ~20 KB gzipped. We gzip on export via the
+// Web Streams CompressionStream API (browser + Node 18+) and write a binary
+// `.wcity` file. Import detects the gzip magic bytes and transparently falls
+// back to plain JSON, so any older `.json` export still loads.
+
+export const SAVE_FILE_EXT = 'wcity'
+
+async function gzip(text: string): Promise<ArrayBuffer> {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))
+  return await new Response(stream).arrayBuffer()
+}
+
+async function gunzip(buf: ArrayBuffer): Promise<string> {
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))
+  return await new Response(stream).text()
+}
+
+function isGzip(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+}
+
+export async function gameStateToBlob(world: World, sim: SimState): Promise<Blob> {
+  const gz = await gzip(gameStateToJSON(world, sim))
+  return new Blob([gz], { type: 'application/gzip' })
+}
+
+export async function gameStateFromBlob(blob: Blob): Promise<{ world: World; sim: SimState }> {
+  const buf = await blob.arrayBuffer()
+  const text = isGzip(new Uint8Array(buf)) ? await gunzip(buf) : new TextDecoder().decode(buf)
+  return gameStateFromJSON(text)
 }
 
 export async function listSavedCities(): Promise<string[]> {

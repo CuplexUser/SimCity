@@ -339,7 +339,7 @@ export function Toolbar({
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/json,.json"
+        accept=".wcity,application/gzip,application/json,.json"
         style={{ display: 'none' }}
         onChange={(e) => {
           const input = e.currentTarget as HTMLInputElement

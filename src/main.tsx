@@ -6,7 +6,7 @@ import { generateWorld } from './data/worldGen'
 import { Zone, Overlay, Building, Terrain, type ActiveTool } from './core/tile'
 import { events, type YearEvent } from './core/events'
 import { applyBulldoze } from './core/bulldoze'
-import { gameStateFromJSON, gameStateToJSON, listSavedCities, loadGameState, normalizeCityName, saveGameState } from './core/saveLoad'
+import { gameStateFromBlob, gameStateToBlob, listSavedCities, loadGameState, normalizeCityName, SAVE_FILE_EXT, saveGameState } from './core/saveLoad'
 import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolbar'
 import { BottomBar } from './ui/BottomBar'
 import { CityLog } from './ui/CityLog'
@@ -126,21 +126,21 @@ function App() {
     }
   }
 
-  function handleExportFile() {
+  async function handleExportFile() {
     const eng = engineRef.current
     if (!eng?.renderer) return
     const name = normalizeCityName(cityName)
     try {
-      const json = gameStateToJSON(eng.world, {
+      const blob = await gameStateToBlob(eng.world, {
         year: eng.sim.getYear(),
         tick: eng.sim.getTick(),
         population: eng.sim.population,
         funds: fundsRef.current,
       })
-      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${name}.json`
+      a.download = `${name}.${SAVE_FILE_EXT}`
       a.click()
       URL.revokeObjectURL(url)
       setCityName(name)
@@ -154,11 +154,11 @@ function App() {
     const eng = engineRef.current
     if (!eng?.renderer) return
     try {
-      const { world, sim } = gameStateFromJSON(await file.text())
+      const { world, sim } = await gameStateFromBlob(file)
       eng.world.replaceFrom(world)
       eng.sim.reset(sim)
       resetUiState(sim.year, sim.population, sim.funds)
-      const name = normalizeCityName(file.name.replace(/\.json$/i, ''))
+      const name = normalizeCityName(file.name.replace(/\.(wcity|json)$/i, ''))
       setCityName(name)
       eng.renderer.minimap.markDirty()
       eng.renderer.draw()

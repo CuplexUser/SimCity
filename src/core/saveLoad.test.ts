@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deserializeGameState, deserializeWorld, gameStateFromJSON, gameStateToJSON, normalizeCityName, serializeGameState, serializeWorld } from './saveLoad'
+import { deserializeGameState, deserializeWorld, gameStateFromBlob, gameStateFromJSON, gameStateToBlob, gameStateToJSON, normalizeCityName, serializeGameState, serializeWorld } from './saveLoad'
 import { World } from './world'
 import { Building, Overlay, Terrain, Zone } from './tile'
 
@@ -72,5 +72,34 @@ describe('saveLoad', () => {
   it('rejects non-JSON and non-city files', () => {
     expect(() => gameStateFromJSON('not json {')).toThrow('valid JSON')
     expect(() => gameStateFromJSON('{"foo":1}')).toThrow('Not a WebCity save file')
+  })
+
+  it('round-trips a city through a gzipped blob, far smaller than the JSON', async () => {
+    const world = new World()
+    // A varied grid (defeats RLE) is what makes the export large — exactly the
+    // case gzip is meant to shrink.
+    for (let r = 0; r < world.rows; r++)
+      for (let c = 0; c < world.cols; c++)
+        world.set(c, r, { elevation: (c * 7 + r * 13) % 9, zone: (c + r) % 4 })
+    world.set(5, 6, { building: Building.Hospital, powered: true })
+    world.set(0, 0, { overlay: Overlay.Road })
+    const sim = { year: 2031, tick: 7, population: 5000, funds: 12_345 }
+
+    const blob = await gameStateToBlob(world, sim)
+    const jsonSize = new Blob([gameStateToJSON(world, sim)]).size
+    expect(blob.size).toBeLessThan(jsonSize / 4)  // gzip shrinks the redundant runs dramatically
+
+    const restored = await gameStateFromBlob(blob)
+    expect(restored.world.get(5, 6).building).toBe(Building.Hospital)
+    expect(restored.world.get(0, 0).overlay & Overlay.Road).toBeTruthy()
+    expect(restored.sim).toEqual(sim)
+  })
+
+  it('still imports a legacy plain-JSON blob', async () => {
+    const world = new World()
+    world.set(1, 1, { building: Building.WaterTower })
+    const blob = new Blob([gameStateToJSON(world, { year: 2000, tick: 0, population: 0, funds: 20_000 })])
+    const restored = await gameStateFromBlob(blob)
+    expect(restored.world.get(1, 1).building).toBe(Building.WaterTower)
   })
 })

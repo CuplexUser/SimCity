@@ -19,7 +19,7 @@
 - [x] City log (year-end budget summary + population milestones)
 - [x] Road connectivity check (A* in utils/astar.ts)
 - [x] Save/load (IndexedDB via idb-keyval, named city slots, RLE-compressed grid)
-- [x] Save/load to a JSON file (Export/Import in Options panel) — portable city files beyond IndexedDB
+- [x] Save/load to a file (Export/Import in Options panel) — portable gzip-compressed `.wcity` files (~20 KB vs ~1.2 MB raw JSON); still imports legacy plain-JSON exports
 - [x] **Renderer migrated to PixiJS v8 (WebGL)** — target upgraded to SimCity 4 quality
 
 ## Phase 2 — Services ✓ complete
