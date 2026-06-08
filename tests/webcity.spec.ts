@@ -45,10 +45,13 @@ test('renders the city canvas and exposes game state text', async ({ page }) => 
     (window as any).__eng?.renderer?.readPixelStats?.()
     ?? { nonTransparent: 0, uniqueColors: 0, greenPixels: 0 }
 
+  // Generous timeout: under software WebGL (SwiftShader on CI) the first frames
+  // are slow, so the default 5s expect.poll window flakes. Stay under the 60s
+  // test ceiling.
   await expect.poll(async () => {
     const stats = await page.evaluate(readStats)
     return stats.greenPixels
-  }).toBeGreaterThan(3_000)
+  }, { timeout: 30_000 }).toBeGreaterThan(3_000)
 
   const canvasStats = await page.evaluate(readStats)
 

@@ -30,7 +30,17 @@ export interface LoadedAtlas {
   variants: Map<string, string[]>
 }
 
-const MANIFEST_URL = '/sprites/manifest.json'
+/**
+ * Resolve a site-root-absolute asset path (e.g. "/sprites/atlas.png") against
+ * Vite's configured base. On GitHub Pages the app is served from a subpath
+ * (e.g. "/SimCity/"), so a bare "/sprites/..." would 404 and silently drop us
+ * back to the procedural fallback sprites.
+ */
+function withBase(path: string): string {
+  return import.meta.env.BASE_URL.replace(/\/$/, '') + '/' + path.replace(/^\//, '')
+}
+
+const MANIFEST_URL = withBase('/sprites/manifest.json')
 
 function empty(): LoadedAtlas {
   return { meta: new Map(), variants: new Map() }
@@ -50,7 +60,7 @@ export async function loadSpriteAtlas(): Promise<LoadedAtlas> {
 
   let base: Texture
   try {
-    base = await Assets.load<Texture>(manifest.image)
+    base = await Assets.load<Texture>(withBase(manifest.image))
   } catch {
     return empty()
   }
