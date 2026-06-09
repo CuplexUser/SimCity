@@ -282,8 +282,6 @@ function App() {
       const { col, row } = hit
       if (!eng.world.inBounds(col, row)) return
 
-      const t = eng.world.get(col, row)
-
       switch (tool.kind) {
         case 'zone': {
           placeZoneTile(col, row, tool.zone)
@@ -300,22 +298,8 @@ function App() {
           })
           break
         }
-        case 'road': {
-          if (t.overlay & Overlay.Road)     return
-          if (t.building !== Building.None) return
-          if (t.density > 0)               return
-          if (t.terrain === Terrain.Water) return
-          if (!spendFunds(OVERLAY_COST[Overlay.Road] ?? 0)) return
-          eng.world.set(col, row, { overlay: t.overlay | Overlay.Road })
-          break
-        }
-        case 'power': {
-          if (t.overlay & Overlay.PowerLine) return
-          if (t.building !== Building.None)  return
-          if (!spendFunds(OVERLAY_COST[Overlay.PowerLine] ?? 0)) return
-          eng.world.set(col, row, { overlay: t.overlay | Overlay.PowerLine })
-          break
-        }
+        // Roads and power lines are placed via drag-to-build line segments
+        // (see lineDrag in the mouse handlers), not freehand painting.
         case 'bulldoze':
           if (!applyBulldoze(eng.world, col, row, tool.mode, tool.mode === 'terrain' ? terrainLevelTarget : undefined)) return
           eng.renderer?.minimap.markDirty()
@@ -332,6 +316,48 @@ function App() {
     let terrainLevelTarget: number | undefined = undefined
     // Drag-to-zone: zone tools fill the rectangle dragged out, applied on mouseup.
     let zoneDrag: { start: { col: number; row: number }; end: { col: number; row: number } } | null = null
+    // Drag-to-build: road/power tools drag out a straight segment locked to the
+    // dominant axis (SimCity-style), previewed live and applied on mouseup.
+    let lineDrag: { start: { col: number; row: number }; end: { col: number; row: number }; kind: 'road' | 'power' } | null = null
+
+    // Lock a drag endpoint to the start tile's row or column, whichever axis the
+    // cursor has moved furthest along, so segments are always straight.
+    function constrainLineEnd(start: { col: number; row: number }, end: { col: number; row: number }) {
+      return Math.abs(end.col - start.col) >= Math.abs(end.row - start.row)
+        ? { col: end.col, row: start.row }
+        : { col: start.col, row: end.row }
+    }
+
+    function showLinePreview() {
+      if (!lineDrag) return
+      const { start, end } = lineDrag
+      eng.renderer?.setHoverTile(
+        Math.min(start.col, end.col), Math.min(start.row, end.row),
+        Math.abs(end.col - start.col) + 1, Math.abs(end.row - start.row) + 1,
+      )
+    }
+
+    // Place one road/power tile: 'skip' passes over tiles that already have the
+    // overlay (no charge), 'blocked' stops the whole segment at an obstacle.
+    function placeOverlayTile(col: number, row: number, kind: 'road' | 'power'): 'placed' | 'skip' | 'blocked' {
+      const overlay = kind === 'road' ? Overlay.Road : Overlay.PowerLine
+      const t = eng.world.get(col, row)
+      if (t.overlay & overlay)          return 'skip'
+      if (t.building !== Building.None) return 'blocked'
+      if (kind === 'road' && (t.density > 0 || t.terrain === Terrain.Water)) return 'blocked'
+      if (!spendFunds(OVERLAY_COST[overlay] ?? 0)) return 'blocked'
+      eng.world.set(col, row, { overlay: t.overlay | overlay })
+      return 'placed'
+    }
+
+    function applyOverlayLine(a: { col: number; row: number }, b: { col: number; row: number }, kind: 'road' | 'power') {
+      const dc = Math.sign(b.col - a.col), dr = Math.sign(b.row - a.row)
+      const len = Math.abs(b.col - a.col) + Math.abs(b.row - a.row) // one axis is always 0
+      for (let i = 0, c = a.col, r = a.row; i <= len; i++, c += dc, r += dr) {
+        if (!eng.world.inBounds(c, r)) break
+        if (placeOverlayTile(c, r, kind) === 'blocked') break
+      }
+    }
 
     function showZoneRectPreview() {
       if (!zoneDrag) return
@@ -377,6 +403,13 @@ function App() {
             if (hit) { zoneDrag = { start: hit, end: hit }; showZoneRectPreview() }
             return
           }
+          // Road/power tools drag out a straight segment (applied on mouseup).
+          if (toolRef.current.kind === 'road' || toolRef.current.kind === 'power') {
+            const rect = canvas.getBoundingClientRect()
+            const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
+            if (hit) { lineDrag = { start: hit, end: hit, kind: toolRef.current.kind }; showLinePreview() }
+            return
+          }
           // Capture the starting elevation for terrain levelling so drag stays consistent
           if (toolRef.current.kind === 'bulldoze' && toolRef.current.mode === 'terrain') {
             const rect = canvas.getBoundingClientRect()
@@ -401,6 +434,14 @@ function App() {
         return
       }
 
+      // Extending a road/power line drag: lock to the dominant axis and preview.
+      if (lineDrag) {
+        const rect = canvas.getBoundingClientRect()
+        const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
+        if (hit) { lineDrag.end = constrainLineEnd(lineDrag.start, hit); showLinePreview() }
+        return
+      }
+
       if (painting) placeTile(e.clientX, e.clientY)
 
       // Hover highlight — show the full footprint when a building tool is active
@@ -421,6 +462,11 @@ function App() {
           const tool = toolRef.current
           if (tool?.kind === 'zone') applyZoneRect(zoneDrag.start, zoneDrag.end, tool.zone)
           zoneDrag = null
+        }
+        // Commit a road/power segment (still a single tile for a plain click).
+        if (lineDrag) {
+          applyOverlayLine(lineDrag.start, lineDrag.end, lineDrag.kind)
+          lineDrag = null
         }
         minimapDragging = false; painting = false; terrainLevelTarget = undefined
       }
