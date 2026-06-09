@@ -178,6 +178,71 @@ describe('stepZones', () => {
     expect(population).toBe(3 * 10 * 4) // density × 10 × (2×2 tiles)
   })
 
+  it('small-town residential stays low-rise (density caps at 2)', () => {
+    const world = new World()
+    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    stepZones(world, true) // population ≈ 20 → stage 0
+    expect(world.get(5, 5).density).toBe(2)
+  })
+
+  it('residential grows past low-rise once city population reaches mid stage', () => {
+    const world = new World()
+    // 50 filler lots × density 2 × 10 = 1,000 population → residential mid stage
+    for (let i = 0; i < 50; i++) {
+      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true })
+    }
+    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(3)
+  })
+
+  it('commercial stays low-rise until the city is much larger than residential needs', () => {
+    const world = new World()
+    // 60 filler lots → 1,200 population: above residential mid (1,000) but
+    // below commercial mid (2,000); commercial demand itself is satisfied.
+    for (let i = 0; i < 60; i++) {
+      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true })
+    }
+    world.set(5, 5, { zone: Zone.Commercial, density: 2, powered: true })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(2)
+  })
+
+  it('3×3 lots only form once the city reaches mid stage', () => {
+    const makeBlock = (world: World) => {
+      for (let row = 5; row <= 7; row++) {
+        for (let col = 5; col <= 7; col++) {
+          world.set(col, row, { zone: Zone.Residential, density: 0, powered: true })
+        }
+      }
+      world.set(5, 4, { overlay: Overlay.Road })
+      world.set(6, 4, { overlay: Overlay.Road })
+    }
+
+    // Small town: 3×3 art exists but the lot develops 1×1
+    const small = new World()
+    makeBlock(small)
+    stepZones(small, true, () => [3])
+    expect(small.get(5, 5).footW).toBe(1)
+    expect(small.get(5, 5).density).toBe(1)
+
+    // Mid-stage city: the same block claims a 3×3 lot
+    const mid = new World()
+    makeBlock(mid)
+    for (let i = 0; i < 50; i++) {
+      mid.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true })
+    }
+    stepZones(mid, true, () => [3])
+    expect(mid.get(5, 5).footW).toBe(3)
+    expect(mid.get(5, 5).density).toBe(1)
+  })
+
   it('non-year ticks do not change density', () => {
     const world = new World()
     world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })

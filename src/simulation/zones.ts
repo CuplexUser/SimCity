@@ -16,6 +16,28 @@ interface ZoneResult {
  */
 export type LotSizer = (zone: Zone) => number[]
 
+/**
+ * Development stages (SimCity-4 style): a city must grow before high density
+ * appears. Stage 0 = low-rise (density cap 2), 1 = mid-rise (cap 5),
+ * 2 = high-rise (cap 8) — the caps align with the renderer's density buckets.
+ * Thresholds are total city population; commerce densifies last so a small
+ * town never sprouts office skyscrapers.
+ */
+const STAGE_THRESHOLDS: Partial<Record<Zone, [number, number]>> = {
+  [Zone.Residential]: [1_000, 6_000],
+  [Zone.Commercial]:  [2_000, 12_000],
+  [Zone.Industrial]:  [1_500, 8_000],
+}
+const STAGE_DENSITY_CAP = [2, 5, 8]
+// Multi-tile lots are a mid-stage development: small towns build 1×1 homes
+// (and the odd 2×2 lot); larger cities assemble bigger plots.
+const STAGE_LOT_CAP = [2, 3, 3]
+
+function devStage(zone: Zone, pop: number): number {
+  const [mid, high] = STAGE_THRESHOLDS[zone] ?? [1_000, 6_000]
+  return pop >= high ? 2 : pop >= mid ? 1 : 0
+}
+
 export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer): ZoneResult {
   let rCount = 0
   let cCount = 0
@@ -47,12 +69,13 @@ export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer
         (tile.zone === Zone.Commercial  && cDemand) ||
         (tile.zone === Zone.Industrial  && iDemand)
 
-      if (!(demand && tile.density < 8 && tile.powered && hasRoadAccess(world, col, row))) return
+      const stage = devStage(tile.zone, prevPop)
+      if (!(demand && tile.density < STAGE_DENSITY_CAP[stage] && tile.powered && hasRoadAccess(world, col, row))) return
 
       // First development on a vacant plot may claim a multi-tile lot from
       // contiguous same-zone vacant neighbors (only when art sizes are known).
       if (tile.density === 0 && lotSizer) {
-        const size = chooseLotSize(world, col, row, tile.zone, lotSizer)
+        const size = chooseLotSize(world, col, row, tile.zone, lotSizer, STAGE_LOT_CAP[stage])
         if (size > 1) {
           placeFootprint(world, col, row, size, size, { zone: tile.zone, density: 1 })
           return
@@ -95,8 +118,8 @@ function population(world: World): number {
  * contiguous block of same-zone, vacant, road-irrelevant tiles anchored at the
  * origin, chosen deterministically per tile so a block isn't uniform.
  */
-function chooseLotSize(world: World, col: number, row: number, zone: Zone, lotSizer: LotSizer): number {
-  const sizes = lotSizer(zone).filter((s) => s >= 1).sort((a, b) => b - a)
+function chooseLotSize(world: World, col: number, row: number, zone: Zone, lotSizer: LotSizer, maxSize: number): number {
+  const sizes = lotSizer(zone).filter((s) => s >= 1 && s <= maxSize).sort((a, b) => b - a)
   if (sizes.length === 0) return 1
 
   // Deterministic preference order rooted at this tile.

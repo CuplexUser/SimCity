@@ -29,11 +29,18 @@ centered at origin with base at z=0; windows face -Y by default.
 
 import bpy
 import os
+import sys
 import json
 import math
 import numpy as np
 from mathutils import Vector
 from bpy_extras.object_utils import world_to_camera_view
+
+# ── Args after "--" ───────────────────────────────────────────────────────────
+# --only a,b,c   render only the named buildings (spriteMap still merges, so
+#                everything else in the existing map/PNGs is left untouched)
+_argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+ONLY = set(_argv[_argv.index("--only") + 1].split(",")) if "--only" in _argv else None
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -241,6 +248,168 @@ def build(mw, md, floors, *, wall="building-window", ground=None,
         instance(tw, 0, 0, (floors + t) * FLOOR_H, DIR_RZ['-Y'] + WALL_OFF, objs)
     if tower:
         instance("roof-flat-top", 0, 0, (floors + tower) * FLOOR_H, 0, objs, grp='roof')
+    return objs
+
+
+def shift(objs, dx, dy, dz=0.0):
+    """Offset a wing built at the grid origin so wings can be composed into one
+    assembly (fit_footprint later normalizes the whole plan to its plot).
+    dz lets a wing start above ground, stacking setback tiers into a tower."""
+    for o in objs:
+        if o.parent is None:
+            o.location.x += dx
+            o.location.y += dy
+            o.location.z += dz
+    bpy.context.view_layer.update()
+    return objs
+
+
+# ── Compound residential lots ──────────────────────────────────────────────────
+# The single box that build() makes reads as a bunker at 3x3; these compose
+# several wings of different heights so each lot has a distinct silhouette.
+# All are assembled on a module grid and scaled to their plot by fit_footprint.
+
+def build_res_court():
+    """Garden court (mid bucket): a 3-floor back wing and two 2-floor side
+    wings around an open front courtyard (transparent ground = grass)."""
+    objs = []
+    objs += shift(build(mw=6, md=2, floors=3, wall="building-window",
+                        ground="building-window-balcony", corner="building-corner-window",
+                        door=None, details=("roof-flat-detail-c",)), 0, 4)
+    objs += shift(build(mw=2, md=4, floors=2, wall="building-window",
+                        corner="building-corner", steps="building-steps-wide"), 0, 0)
+    objs += shift(build(mw=2, md=4, floors=2, wall="building-window",
+                        corner="building-corner"), 4, 0)
+    return objs
+
+
+def build_res_rows():
+    """Row apartments (mid bucket): two parallel slabs of different heights
+    separated by a green strip."""
+    objs = []
+    objs += shift(build(mw=6, md=2, floors=3, wall="building-window",
+                        ground="building-window-awnings", corner="building-corner-window",
+                        door=None, details=("roof-flat-detail-b",)), 0, 4)
+    objs += shift(build(mw=6, md=2, floors=2, wall="building-window-balcony",
+                        ground="building-window", corner="building-corner",
+                        steps="building-steps-wide"), 0, 0)
+    return objs
+
+
+def build_res_tower_podium():
+    """High-rise on a podium: a 2-floor full-plot base with a 9-floor tower
+    rising from its center."""
+    objs = []
+    objs += build(mw=5, md=5, floors=2, wall="building-window-large",
+                  ground="building-window-awnings", corner="building-corner-window",
+                  steps="building-steps-wide", details=("roof-flat-detail-a",))
+    objs += shift(build(mw=3, md=3, floors=9, wall="building-window",
+                        corner="building-corner-window", door=None, ac=True), 1, 1)
+    return objs
+
+
+def build_res_twin():
+    """Twin 8-floor apartment towers joined by a 1-floor entrance lobby."""
+    objs = []
+    objs += shift(build(mw=2, md=4, floors=8, wall="building-window",
+                        ground="building-window-balcony", corner="building-corner-window",
+                        door=None, details=("roof-flat-detail-c",)), 0, 0)
+    objs += shift(build(mw=2, md=4, floors=8, wall="building-window",
+                        ground="building-window-balcony", corner="building-corner-window",
+                        door=None, details=("roof-flat-detail-c",)), 3, 0)
+    objs += shift(build(mw=1, md=1, floors=1, wall="building-window-large",
+                        steps="building-steps-wide"), 2, 0)
+    return objs
+
+
+def build_res_point_tower():
+    """Slender 8-floor point tower with a 1-floor entrance porch; the plot's
+    remaining ground stays transparent so it reads as a lawn."""
+    objs = []
+    objs += shift(build(mw=3, md=3, floors=8, wall="building-window",
+                        ground="building-window-large", corner="building-corner-window",
+                        door=None, ac=True, details=("roof-flat-detail-a",)), 0, 1)
+    objs += shift(build(mw=3, md=1, floors=1, wall="building-window-large",
+                        steps="building-steps-wide"), 0, 0)
+    return objs
+
+
+def _tower_ring(cells, solid, z, objs, door_cell=None):
+    """One perimeter floor of an office tower. Corner cells get limestone
+    corner modules; faces mix limestone piers and glass bays, with the same
+    module per (i, j) column so the two-tone stripes stay vertical. `solid` is
+    the tier's full plan region (incl. interior) — exposure is tested against
+    it so the hollow core doesn't read as an exposed face."""
+    DIRS = {'-X': (-1, 0), '+X': (1, 0), '-Y': (0, -1), '+Y': (0, 1)}
+    for (i, j) in cells:
+        dirs = [d for d, (di, dj) in DIRS.items() if (i + di, j + dj) not in solid]
+        if not dirs:
+            continue
+        d = next((p for p in ('-Y', '+X', '+Y', '-X') if p in dirs), dirs[0])
+        if len(dirs) == 2 and frozenset(dirs) in CORNER_RZ:
+            instance("building-corner-window", i, j, z, CORNER_RZ[frozenset(dirs)], objs, grp='trim')
+        elif (i, j) == door_cell:
+            instance("building-door", i, j, z, DIR_RZ[d], objs, grp='trim')
+            instance("building-steps-wide", i, j, z, DIR_RZ[d], objs, grp='trim')
+        elif i == 2 or j == 2:
+            # dark glass stripe up the center of each face (and the crown's
+            # protruding mid-edge fins, which have 3 exposed sides)
+            instance("building-window-large", i, j, z, DIR_RZ[d], objs, grp='wall')
+        else:
+            # punched-window limestone piers flanking the glass
+            instance("building-window", i, j, z, DIR_RZ[d], objs, grp='trim')
+
+
+def _ledges(cells, z, objs, color):
+    """Thin flush caps over notched-out cells (box primitives — the kit roof
+    modules overhang their cell, which reads as fins mid-tower)."""
+    for (i, j) in cells:
+        box(objs, i, j, z + 0.03, 1.0, 1.0, 0.06, color)["grp"] = 'trim'
+
+
+def _slabs(cells, z, objs, grp, mods=None):
+    for (i, j) in cells:
+        instance((mods or {}).get((i, j), "roof-flat-center"), i, j, z, 0, objs, grp=grp)
+
+
+def build_com_tower():
+    """Office tower modeled on the SC4 supertalls: one monolithic glass shaft
+    with limestone piers, small corner notches near the crown (no wedding-cake
+    terracing), and a dark mechanical roof."""
+    objs = []
+    N = 5
+    full_plan = {(i, j) for i in range(N) for j in range(N)}
+    full_ring = [c for c in sorted(full_plan) if c[0] in (0, N - 1) or c[1] in (0, N - 1)]
+    corners = {(0, 0), (0, N - 1), (N - 1, 0), (N - 1, N - 1)}
+    notch_plan = full_plan - corners
+    notch_ring = [c for c in full_ring if c not in corners]
+    # Double-notched crown: the corners step in once more, leaving a plus shape
+    # whose mid-edge fins carry the glass stripe to the roof (SC4 serration).
+    plus_plan = {(i, j) for i in range(1, 4) for j in range(1, 4)} | {(2, 0), (0, 2), (4, 2), (2, 4)}
+    plus_ring = [c for c in sorted(plus_plan)
+                 if any((c[0] + di, c[1] + dj) not in plus_plan for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+
+    # Straight shaft, then the serrated corner steps — no wedding-cake tiers.
+    LIME = COM_PALETTE['trim']
+    for f in range(12):
+        _tower_ring(full_ring, full_plan, f * FLOOR_H, objs, door_cell=(2, 0) if f == 0 else None)
+    _ledges(sorted(corners), 12 * FLOOR_H, objs, LIME)
+    for f in range(12, 15):
+        _tower_ring(notch_ring, notch_plan, f * FLOOR_H, objs)
+    _ledges([c for c in notch_ring if c not in plus_plan], 15 * FLOOR_H, objs, LIME)
+    for f in range(15, 18):
+        _tower_ring(plus_ring, plus_plan, f * FLOOR_H, objs)
+
+    # Dark mechanical roof: slabs + kit vents, a penthouse box, edge rails.
+    zr = 18 * FLOOR_H
+    _slabs(sorted(plus_plan), zr, objs, 'roof',
+           mods={(1, 2): "roof-flat-detail-a", (3, 1): "roof-flat-detail-c"})
+    DARK = (0.18, 0.19, 0.22)
+    box(objs, 2.0, 2.7, zr + 0.16, 0.9, 0.6, 0.26, DARK)["grp"] = 'roof'
+    for y in (0.55, 3.45):
+        box(objs, 2.0, y, zr + 0.14, 2.9, 0.05, 0.05, DARK)["grp"] = 'roof'
+    for x in (0.55, 3.45):
+        box(objs, x, 2.0, zr + 0.14, 0.05, 2.9, 0.05, DARK)["grp"] = 'roof'
     return objs
 
 
@@ -618,17 +787,32 @@ MID_RES = [
         ground="building-window-balcony", corner="building-corner"),
         None, RES_PALETTE),
 ]
+# Additional residential palettes so the 3x3 lots aren't all gray-and-green.
+RES_PALETTE_BRICK = {
+    'wall': (0.66, 0.45, 0.34),   # warm brick
+    'roof': (0.30, 0.30, 0.33),   # dark slate
+    'trim': (0.82, 0.78, 0.70),   # limestone trim
+}
+RES_PALETTE_CREAM = {
+    'wall': (0.88, 0.84, 0.72),   # cream stucco
+    'roof': (0.45, 0.30, 0.24),   # terracotta
+    'trim': (0.40, 0.42, 0.44),
+}
+COM_PALETTE = {
+    'wall': (0.16, 0.32, 0.62),   # blue curtain-wall glass
+    'trim': (0.88, 0.85, 0.74),   # limestone piers and ledges
+    'roof': (0.18, 0.19, 0.22),   # dark mechanical roof
+}
 BIG = MID_RES + [
-    (1, 2, 0, "big_res", 3, dict(
-        mw=3, md=3, floors=3, wall="building-window",
-        ground="building-window-balcony", corner="building-corner",
-        details=("roof-flat-detail-c",)),
-        None, RES_PALETTE),                                     # residential — gray walls, green roof
-    (2, 2, 5, "big_com", 3, dict(
-        mw=3, md=3, floors=7, wall="building-window-large",
-        corner="building-corner-window", ac=True,
-        details=("roof-flat-detail-a", "roof-flat-detail-b")),
-        (0.70, 0.85, 1.10), None),                              # commercial — blue glass tower
+    # 3x3 residential variety: compound massings (builder callables) so the lots
+    # read as courts and towers rather than uniform boxes.
+    (1, 1, 4, "garden_res_a", 3, build_res_court,        None, RES_PALETTE),
+    (1, 1, 5, "garden_res_b", 3, build_res_rows,         None, RES_PALETTE_BRICK),
+    (1, 2, 0, "big_res",      3, build_res_point_tower,  None, RES_PALETTE_CREAM),
+    (1, 2, 1, "big_res_b",    3, build_res_tower_podium, None, RES_PALETTE),
+    (1, 2, 2, "big_res_c",    3, build_res_twin,         None, RES_PALETTE_BRICK),
+    (2, 2, 5, "big_com", 3, build_com_tower,
+        None, COM_PALETTE),                                     # commercial — limestone-and-glass office tower
     (3, 2, 6, "big_ind", 3, dict(
         mw=4, md=4, floors=2, wall="building-window", ac=True,
         details=("roof-flat-detail-d",)),
@@ -644,6 +828,8 @@ def main():
 
     summary = []
     for enum, name, foot, kw, tint in CIVIC:
+        if ONLY and name not in ONLY:
+            continue
         objs = build(**kw)
         for png, entry in render_static(objs, foot, f"b:{enum}", name, tint=tint):
             sprite_map[png] = entry
@@ -651,7 +837,9 @@ def main():
         summary.append((f"b:{enum}", name, foot))
 
     for zone, bucket, variant, name, foot, kw, tint, palette in BIG:
-        objs = build(**kw)
+        if ONLY and name not in ONLY:
+            continue
+        objs = kw() if callable(kw) else build(**kw)
         kb = f"z:{zone}:{bucket}:{variant}"
         for png, entry in render_rotations(objs, foot, kb, name, tint=tint, palette=palette):
             sprite_map[png] = entry
@@ -659,6 +847,8 @@ def main():
         summary.append((kb, name, foot))
 
     for key, name, foot, builder in INFRA:
+        if ONLY and name not in ONLY:
+            continue
         objs = builder()
         for png, entry in render_static(objs, foot, key, name, palette='keep'):
             sprite_map[png] = entry
