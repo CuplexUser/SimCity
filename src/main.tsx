@@ -4,7 +4,7 @@ import { Engine } from './core/engine'
 import { World } from './core/world'
 import { generateWorld } from './data/worldGen'
 import { Zone, Overlay, Building, Terrain, type ActiveTool } from './core/tile'
-import { events, type YearEvent } from './core/events'
+import { events, type TickEvent, type YearEvent } from './core/events'
 import { applyBulldoze } from './core/bulldoze'
 import { gameStateFromBlob, gameStateToBlob, listSavedCities, loadGameState, normalizeCityName, SAVE_FILE_EXT, saveGameState } from './core/saveLoad'
 import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolbar'
@@ -34,6 +34,7 @@ function App() {
   const [year,   setYear]   = useState(2000)
   const [pop,    setPop]    = useState(0)
   const [funds,  setFunds]  = useState(20_000)
+  const [power,  setPower]  = useState({ powered: 0, unpowered: 0 })
   const [speed,  setSpeed]  = useState(1)
   const [optionsStatus, setOptionsStatus] = useState('')
   const [cityName, setCityName] = useState('New City')
@@ -71,6 +72,7 @@ function App() {
     setYear(yearValue)
     setPop(populationValue)
     setFunds(fundsValue)
+    setPower({ powered: 0, unpowered: 0 })
     setActiveKey(null)
   }
 
@@ -515,6 +517,13 @@ function App() {
 
     // ── Sim events ───────────────────────────────────────────────────────────
 
+    // Live indicators (population + zone power coverage) refresh every sim tick,
+    // not just at year-end, so power problems surface as soon as they happen.
+    const offTick = events.on<TickEvent>('tick', () => {
+      setPop(eng.sim.population)
+      setPower({ ...eng.sim.power })
+    })
+
     const offYear = events.on<YearEvent>('year', ({ year, revenue, expenses }) => {
       setYear(year)
       setPop(eng.sim.population)
@@ -544,6 +553,7 @@ function App() {
       delete window.render_game_to_text
       delete window.advanceTime
       delete window.__eng
+      offTick()
       offYear()
     }
   }, [])
@@ -569,7 +579,7 @@ function App() {
         showZoneOverlay={showZoneOverlay}
         onZoneOverlay={handleZoneOverlay}
       />
-      <BottomBar year={year} population={pop} funds={funds} />
+      <BottomBar year={year} population={pop} funds={funds} power={power} />
       <SpeedControl speed={speed} onSpeedChange={handleSpeedChange} />
       <CityLog />
     </div>

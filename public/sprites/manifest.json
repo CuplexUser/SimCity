@@ -1,5 +1,8 @@
 {
   "image": "/sprites/atlas.png",
+  "images": [
+    "/sprites/atlas.png"
+  ],
   "tilePx": 64,
   "entries": [
     {

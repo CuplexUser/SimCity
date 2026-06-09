@@ -20,13 +20,17 @@
  */
 
 import { createCanvas } from '@napi-rs/canvas'
-import { mkdirSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { packAndWrite, ZOOM_LEVELS } from './atlasPack.mjs'
 
 const HW = 32, HH = 16          // half tile width/height at zoom 1
 const TILE_PX = 64
 const OUT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../public/sprites')
+
+// Zoom level being generated: the drawing code below works in 1× geometry and
+// a canvas transform re-renders it crisply at 2×/4× for the hi-res atlases.
+let SCALE = 1
 
 // ── A single building canvas in plot-diamond space ──────────────────────────
 // We draw in (i,j) tile coordinates where i grows toward screen-east and j
@@ -38,11 +42,17 @@ function makeSprite(fw, fh, wallH, draw) {
   const frameH = wallH + (fw + fh) * HH
   const anchorX = fh * HW
   const anchorY = wallH
-  const canvas = createCanvas(frameW, frameH)
+  const canvas = createCanvas(frameW * SCALE, frameH * SCALE)
   const ctx = canvas.getContext('2d')
+  ctx.scale(SCALE, SCALE)
   const iso = (i, j, h = 0) => ({ x: anchorX + (i - j) * HW, y: anchorY + (i + j) * HH - h })
   draw(ctx, iso, fw, fh, wallH)
-  return { canvas, frameW, frameH, anchorX, anchorY, fw, fh }
+  return {
+    canvas,
+    frameW: frameW * SCALE, frameH: frameH * SCALE,
+    anchorX: anchorX * SCALE, anchorY: anchorY * SCALE,
+    fw, fh,
+  }
 }
 
 function poly(ctx, pts, fill) {
@@ -200,8 +210,9 @@ function civic(pal, fw, fh, wallH, floors, sign) {
 // keys: z:{zone}:{bucket}:{variant}  (zone 1=R 2=C 3=I; bucket 0/1/2)
 //       b:{building}                  (matches Building enum + BUILDING_FOOTPRINT)
 
-const sprites = [] // { key, sprite }
-const push = (key, sprite) => sprites.push({ key, sprite })
+function buildSpriteList() {
+  const sprites = [] // { key, sprite }
+  const push = (key, sprite) => sprites.push({ key, sprite })
 
 // Residential — low bucket: 1×1 & 2×2 houses, 3×3 estate (suburban variety)
 push('z:1:0:0', houseLot(PAL.rWarm, 1, 1))
@@ -245,42 +256,20 @@ push('b:9',  blockLot(PAL.cWhite, 4, 4, 2, 34, { margin: 0.08, ground: '#777' })
 push('b:10', blockLot({ top: '#2a3a5a', se: '#1c2c4a', sw: '#121f38' }, 3, 3, 1, 8, { margin: 0.04, ground: '#5b605b', glass: 'rgba(60,110,200,0.6)' })) // Solar
 push('b:11', civic(PAL.cWhite, 1, 1, 60, 1))                                           // Wind turbine (tall mast)
 
-// ── Shelf-pack into one atlas ──────────────────────────────────────────────────
-const PAD = 2
-sprites.sort((a, b) => b.sprite.frameH - a.sprite.frameH)
-const MAX_W = 2048
-let x = PAD, y = PAD, shelfH = 0, atlasW = 0, atlasH = 0
-const placed = []
-for (const s of sprites) {
-  const { frameW, frameH } = s.sprite
-  if (x + frameW + PAD > MAX_W) { x = PAD; y += shelfH + PAD; shelfH = 0 }
-  placed.push({ ...s, x, y })
-  x += frameW + PAD
-  shelfH = Math.max(shelfH, frameH)
-  atlasW = Math.max(atlasW, x)
-  atlasH = Math.max(atlasH, y + shelfH + PAD)
+  return sprites
 }
 
-const atlas = createCanvas(atlasW, atlasH)
-const actx = atlas.getContext('2d')
-const entries = []
-for (const p of placed) {
-  actx.drawImage(p.sprite.canvas, p.x, p.y)
-  entries.push({
-    key: p.key,
-    frame: { x: p.x, y: p.y, w: p.sprite.frameW, h: p.sprite.frameH },
-    footW: p.sprite.fw,
-    footH: p.sprite.fh,
-    anchorX: p.sprite.anchorX,
-    anchorY: p.sprite.anchorY,
-    scale: 1,
-  })
+// ── Pack one atlas per zoom level ────────────────────────────────────────────
+for (const level of ZOOM_LEVELS) {
+  SCALE = level
+  const sprites = buildSpriteList().map(({ key, sprite }) => ({
+    key,
+    canvas: sprite.canvas,
+    frameW: sprite.frameW, frameH: sprite.frameH,
+    footW: sprite.fw, footH: sprite.fh,
+    anchorX: sprite.anchorX, anchorY: sprite.anchorY,
+    scale: 1 / level,
+  }))
+  const out = packAndWrite(sprites, level, OUT_DIR, TILE_PX * level)
+  console.log(`[${level}x] Wrote ${out.entries} sprites → ${out.images.join(', ')} (${out.dims.join(', ')})`)
 }
-
-mkdirSync(OUT_DIR, { recursive: true })
-writeFileSync(resolve(OUT_DIR, 'atlas.png'), atlas.toBuffer('image/png'))
-writeFileSync(resolve(OUT_DIR, 'manifest.json'), JSON.stringify({
-  image: '/sprites/atlas.png', tilePx: TILE_PX, entries,
-}, null, 2))
-
-console.log(`Wrote ${entries.length} sprites → ${OUT_DIR}\\atlas.png (${atlasW}×${atlasH}) + manifest.json`)

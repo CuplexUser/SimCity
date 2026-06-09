@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { stepPower } from './power'
 import { World } from '../core/world'
-import { Building, Terrain, Overlay } from '../core/tile'
+import { Building, Terrain, Overlay, Zone } from '../core/tile'
 
 describe('stepPower', () => {
   it('nothing is powered when no power plant exists', () => {
@@ -45,6 +45,26 @@ describe('stepPower', () => {
     stepPower(world)
     expect(world.get(5, 6).powered).toBe(true)
     expect(world.get(5, 7).powered).toBe(true)
+  })
+
+  it('reports powered vs unpowered zone tiles', () => {
+    const world = new World()
+    // Two zone tiles near a plant, one far outside its 50-tile range
+    world.set(5, 5, { building: Building.PowerPlant })
+    world.set(5, 6, { zone: Zone.Residential })
+    world.set(6, 5, { zone: Zone.Commercial })
+    world.set(100, 100, { zone: Zone.Industrial })
+
+    const stats = stepPower(world)
+    expect(stats.powered).toBe(2)
+    expect(stats.unpowered).toBe(1)
+  })
+
+  it('reports zero coverage with no zones', () => {
+    const world = new World()
+    world.set(5, 5, { building: Building.PowerPlant })
+    const stats = stepPower(world)
+    expect(stats).toEqual({ powered: 0, unpowered: 0 })
   })
 
   it('clears powered flags on each call', () => {

@@ -1,6 +1,12 @@
 import { type World } from '../core/world'
-import { Building, Terrain, Overlay } from '../core/tile'
+import { Building, Terrain, Overlay, Zone } from '../core/tile'
 import { floodFill } from '../utils/floodfill'
+
+/** Zone-tile power coverage after a stepPower pass — drives the UI indicator. */
+export interface PowerStats {
+  powered:   number  // zoned tiles receiving power
+  unpowered: number  // zoned tiles without power (growth is stalled there)
+}
 
 // Range in tiles for each power-producing building
 const POWER_RANGE: Partial<Record<Building, number>> = {
@@ -11,7 +17,7 @@ const POWER_RANGE: Partial<Record<Building, number>> = {
   [Building.WindTurbine]:25,
 }
 
-export function stepPower(world: World): void {
+export function stepPower(world: World): PowerStats {
   // Collect sources grouped by range so we can run one BFS per plant
   const byRange = new Map<number, { col: number; row: number }[]>()
 
@@ -32,4 +38,12 @@ export function stepPower(world: World): void {
       world.get(c, r).powered = true
     })
   }
+
+  const stats: PowerStats = { powered: 0, unpowered: 0 }
+  world.forEach((tile) => {
+    if (tile.zone === Zone.None) return
+    if (tile.powered) stats.powered++
+    else stats.unpowered++
+  })
+  return stats
 }

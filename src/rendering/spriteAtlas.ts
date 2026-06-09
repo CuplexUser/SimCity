@@ -40,16 +40,21 @@ function withBase(path: string): string {
   return import.meta.env.BASE_URL.replace(/\/$/, '') + '/' + path.replace(/^\//, '')
 }
 
-const MANIFEST_URL = withBase('/sprites/manifest.json')
+/** Zoom levels with their own packed atlas (must match tools/atlasPack.mjs). */
+export type AtlasLevel = 1 | 2 | 4
+
+// ".2x"/".4x" (not "@2x") — Pixi parses "@Nx" filenames as a resolution hint,
+// which would shrink the texture's logical size and break frame coordinates.
+const LEVEL_SUFFIX: Record<AtlasLevel, string> = { 1: '', 2: '.2x', 4: '.4x' }
 
 function empty(): LoadedAtlas {
   return { meta: new Map(), variants: new Map() }
 }
 
-export async function loadSpriteAtlas(): Promise<LoadedAtlas> {
+export async function loadSpriteAtlas(level: AtlasLevel = 1): Promise<LoadedAtlas> {
   let manifest: SpriteManifest
   try {
-    const res = await fetch(MANIFEST_URL)
+    const res = await fetch(withBase(`/sprites/manifest${LEVEL_SUFFIX[level]}.json`))
     if (!res.ok) return empty()
     manifest = (await res.json()) as SpriteManifest
   } catch {
@@ -58,9 +63,10 @@ export async function loadSpriteAtlas(): Promise<LoadedAtlas> {
 
   if (!manifest?.entries?.length) return empty()
 
-  let base: Texture
+  let pages: Texture[]
   try {
-    base = await Assets.load<Texture>(withBase(manifest.image))
+    const paths = manifest.images ?? [manifest.image]
+    pages = await Promise.all(paths.map((p) => Assets.load<Texture>(withBase(p))))
   } catch {
     return empty()
   }
@@ -68,6 +74,8 @@ export async function loadSpriteAtlas(): Promise<LoadedAtlas> {
   const result = empty()
 
   for (const e of manifest.entries) {
+    const base = pages[e.page ?? 0]
+    if (!base) continue
     const frame = new Rectangle(e.frame.x, e.frame.y, e.frame.w, e.frame.h)
     const texture = new Texture({ source: base.source, frame })
     result.meta.set(e.key, {

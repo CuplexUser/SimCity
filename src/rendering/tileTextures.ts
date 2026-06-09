@@ -39,13 +39,14 @@ export function getOverlayKey(overlay: number, roadMask: number): string {
 
 // ── Internal bakers ────────────────────────────────────────────────────────────
 
-function bakeBuilding(tile: Tile): Texture {
+function bakeBuilding(tile: Tile, scale: number): Texture {
   const hw = TILE_W / 2, hh = TILE_H / 2
   const cx = BLDG_CANVAS_W / 2  // 32 — center of canvas
   const cy = BLDG_APEX_Y        // 224 — tile apex Y in canvas-local coords
 
-  const oc  = new OffscreenCanvas(BLDG_CANVAS_W, BLDG_CANVAS_H)
+  const oc  = new OffscreenCanvas(BLDG_CANVAS_W * scale, BLDG_CANVAS_H * scale)
   const ctx = oc.getContext('2d')!
+  ctx.scale(scale, scale)
 
   if (tile.density > 0) {
     drawZoneBuilding(ctx, cx, cy, hw, hh, tile.zone, tile.density)
@@ -56,13 +57,14 @@ function bakeBuilding(tile: Tile): Texture {
   return Texture.from(oc.transferToImageBitmap())
 }
 
-function bakeRoadOverlay(roadMask: number): Texture {
+function bakeRoadOverlay(roadMask: number, scale: number): Texture {
   const hw = TILE_W / 2, hh = TILE_H / 2
   const cx = TILE_W / 2  // 32
   const cy = 0           // tile apex at top of canvas
 
-  const oc  = new OffscreenCanvas(TILE_W, TILE_H)
+  const oc  = new OffscreenCanvas(TILE_W * scale, TILE_H * scale)
   const ctx = oc.getContext('2d')!
+  ctx.scale(scale, scale)
 
   drawRoadTile(ctx, cx, cy, hw, hh, roadMask, 1)
 
@@ -73,15 +75,19 @@ function bakeRoadOverlay(roadMask: number): Texture {
 
 export type TextureCache = Map<string, Texture>
 
-/** Pre-bake every possible building and overlay texture. ~100 textures total. */
-export function bakeAllTextures(): TextureCache {
+/**
+ * Pre-bake every possible building and overlay texture. ~100 textures total.
+ * `scale` bakes the same keys at a higher resolution (2 = 128px tile, 4 = 256px
+ * tile) so the renderer can hot-swap crisp textures when the camera zooms in.
+ */
+export function bakeAllTextures(scale = 1): TextureCache {
   const cache: TextureCache = new Map()
 
   // Zone buildings  (zone × density = 3 × 9 = 27)
   for (const zone of [Zone.Residential, Zone.Commercial, Zone.Industrial]) {
     for (let density = 1; density <= 9; density++) {
       const stub = { zone, density, building: Building.None } as Tile
-      cache.set(`z:${zone}:${density}`, bakeBuilding(stub))
+      cache.set(`z:${zone}:${density}`, bakeBuilding(stub, scale))
     }
   }
 
@@ -94,14 +100,14 @@ export function bakeAllTextures(): TextureCache {
   ]
   for (const bldg of allBldgs) {
     const stub = { building: bldg, zone: Zone.None, density: 0 } as Tile
-    cache.set(`b:${bldg}`, bakeBuilding(stub))
+    cache.set(`b:${bldg}`, bakeBuilding(stub, scale))
   }
 
   // Road overlays: road-neighbor mask (0-15) = 16 textures. Power lines are no
   // longer baked per-tile — they render as live Graphics conductors plus spaced
   // pylon sprites in renderer.ts, so wires span continuously between pylons.
   for (let mask = 0; mask < 16; mask++) {
-    cache.set(getOverlayKey(Overlay.Road, mask), bakeRoadOverlay(mask))
+    cache.set(getOverlayKey(Overlay.Road, mask), bakeRoadOverlay(mask, scale))
   }
 
   return cache

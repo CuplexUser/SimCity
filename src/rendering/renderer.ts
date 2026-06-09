@@ -25,7 +25,7 @@ import {
   getBuildingKey, getOverlayKey,
   BLDG_CANVAS_H, BLDG_APEX_Y,
 } from './tileTextures'
-import { loadSpriteAtlas, type LoadedAtlas, type SpriteMeta } from './spriteAtlas'
+import { loadSpriteAtlas, type AtlasLevel, type LoadedAtlas, type SpriteMeta } from './spriteAtlas'
 import { drawTerrainTexture } from './sprites'
 
 // Deterministic per-tile hash for picking a building variant from the atlas.
@@ -98,10 +98,13 @@ export class Renderer {
   private buildingSprites: (Sprite   | null)[]
   private _powerArmH = 30   // screen px from tile apex up to the conductor attach height (from pylon meta)
 
-  // Shared texture cache for building/overlay textures (~100 textures)
-  private texCache!: TextureCache
-  // Loaded sprite atlas (empty when no manifest present → pure procedural fallback)
-  private atlas: LoadedAtlas = { meta: new Map(), variants: new Map() }
+  // Texture caches and atlases per zoom level (1× always present; 2×/4× are
+  // baked/fetched lazily the first time the camera zooms in, then hot-swapped).
+  // Keys are identical across levels, so a swap is "same key, other cache".
+  private texCaches = new Map<number, TextureCache>()
+  private atlases   = new Map<number, LoadedAtlas>()
+  private _texLevel: AtlasLevel = 1
+  private _levelPending = new Set<number>()
   // Shared terrain textures: one per non-Grass terrain type (3 total)
   private terrainTexCache = new Map<Terrain, Texture>()
 
@@ -180,15 +183,15 @@ export class Renderer {
     this.app.stage.addChild(this.worldContainer)
 
     // Pre-bake shared building + overlay textures (~100 total) — procedural fallback
-    this.texCache = bakeAllTextures()
+    this.texCaches.set(1, bakeAllTextures())
 
     // Load the building sprite atlas if present (empty map → pure procedural fallback)
-    this.atlas = await loadSpriteAtlas()
+    this.atlases.set(1, await loadSpriteAtlas())
 
     // Conductor attach height: the pylon sprite rises anchorY*scale px above the
     // tile apex; its cross-arms sit near the top, so hang the wires at ~0.82 of
     // that. Falls back to a fixed height when there's no pylon art.
-    const pylonMeta = this.atlas.meta.get('infra:pylon')
+    const pylonMeta = this._baseAtlas.meta.get('infra:pylon')
     if (pylonMeta) this._powerArmH = pylonMeta.anchorY * pylonMeta.scale * 0.66
 
     // Pre-bake shared terrain textures for non-Grass types
@@ -253,6 +256,11 @@ export class Renderer {
     this.worldContainer.x = camera.panX
     this.worldContainer.y = camera.panY
     this.worldContainer.scale.set(camera.zoom)
+
+    // Swap texture resolution to match the zoom level (lazy: until the hi-res
+    // assets are ready the current textures keep rendering, just GPU-scaled).
+    const wantLevel: AtlasLevel = camera.zoom >= 4 ? 4 : camera.zoom >= 2 ? 2 : 1
+    if (wantLevel !== this._texLevel) this._setTexLevel(wantLevel)
 
     // Process tiles changed since last frame
     if (world.dirty.size > 0) {
@@ -384,7 +392,7 @@ export class Renderer {
    */
   zoneLotSizes(): Map<number, number[]> {
     const out = new Map<number, Set<number>>()
-    for (const [key, meta] of this.atlas.meta) {
+    for (const [key, meta] of this._baseAtlas.meta) {
       if (!key.startsWith('z:')) continue
       if (meta.footW !== meta.footH) continue // only square lots are claimable
       const zone = Number(key.split(':')[1])
@@ -406,6 +414,63 @@ export class Renderer {
 
   private _idx(col: number, row: number): number {
     return row * this.world.cols + col
+  }
+
+  // ── Zoom-level texture swapping ───────────────────────────────────────────
+
+  /** The 1× atlas — always loaded; used for variant *selection* (so a lot keeps
+   *  the same building across zoom levels) and as the art fallback. */
+  private get _baseAtlas(): LoadedAtlas {
+    return this.atlases.get(1)!
+  }
+
+  /** Atlas sprite metadata for a key at the current zoom level, falling back to
+   *  the 1× atlas. SpriteMeta.scale is absolute (frame-px → world-px), so a
+   *  hi-res meta drops in without any further scale compensation. */
+  private _atlasMeta(key: string): SpriteMeta | null {
+    return this.atlases.get(this._texLevel)?.meta.get(key)
+      ?? this._baseAtlas.meta.get(key)
+      ?? null
+  }
+
+  /** Procedurally baked texture for a key at the current zoom level (falling
+   *  back to 1×) plus the resolution it was baked at, which the caller must
+   *  divide the sprite scale by to keep the world-space size constant. */
+  private _bakedTex(key: string): { tex: Texture; bakeScale: number } | null {
+    const lvl = this.texCaches.get(this._texLevel)?.get(key)
+    if (lvl) return { tex: lvl, bakeScale: this._texLevel }
+    const base = this.texCaches.get(1)!.get(key)
+    return base ? { tex: base, bakeScale: 1 } : null
+  }
+
+  /** Switch to a zoom level's textures, preparing its assets on first use. */
+  private _setTexLevel(level: AtlasLevel): void {
+    if (!this.texCaches.has(level)) {
+      if (!this._levelPending.has(level)) {
+        this._levelPending.add(level)
+        loadSpriteAtlas(level).then((atlas) => {
+          // Missing manifest → empty atlas: art falls back to 1× but the
+          // procedural bake below still sharpens roads + fallback buildings.
+          this.atlases.set(level, atlas)
+          this.texCaches.set(level, bakeAllTextures(level))
+          this._levelPending.delete(level)
+          // draw() re-requests the level on the next frame and swaps in.
+        })
+      }
+      return
+    }
+    this._texLevel = level
+    this._refreshAllSprites()
+  }
+
+  /** Re-resolve textures on every existing overlay/building sprite. */
+  private _refreshAllSprites(): void {
+    this.world.forEach((_tile, col, row) => {
+      const idx = this._idx(col, row)
+      if (this.overlaySprites[idx] || this.pylonSprites[idx] || this.wireGfx[idx]) this._rebuildOverlay(col, row)
+      if (this.buildingSprites[idx]) this._rebuildBuilding(col, row)
+    })
+    this.worldContainer.sortChildren()
   }
 
   // ── Terrain layers ────────────────────────────────────────────────────────
@@ -505,10 +570,11 @@ export class Renderer {
     if (tile.overlay & Overlay.Road) {
       const mask = this._roadMask(col, row)
       this.overlayMask[idx] = mask
-      const tex = this.texCache.get(getOverlayKey(Overlay.Road, mask))
-      if (tex) {
-        const sprite = new Sprite(tex)
+      const baked = this._bakedTex(getOverlayKey(Overlay.Road, mask))
+      if (baked) {
+        const sprite = new Sprite(baked.tex)
         sprite.anchor.set(0.5, 0)
+        sprite.scale.set(1 / baked.bakeScale)
         sprite.x      = (col - row) * BASE_HW
         sprite.y      = (col + row) * BASE_HH - tile.elevation * BASE_EH
         sprite.zIndex = (col + row) * 3 + 1
@@ -568,7 +634,7 @@ export class Renderer {
     if (pmask & 4) span(col, row + 1)   // S edge
 
     // No pylon art: draw a simple pole so power runs still read in the fallback.
-    if (!this.atlas.meta.get('infra:pylon') && this._pylonAt(col, row, pmask)) {
+    if (!this._baseAtlas.meta.get('infra:pylon') && this._pylonAt(col, row, pmask)) {
       const baseY = (col + row) * BASE_HH - tile.elevation * BASE_EH + BASE_HH
       g.moveTo(a.x, baseY).lineTo(a.x, a.y - 2).stroke({ color: 0x6a5a38, width: 2 })
       g.moveTo(a.x - 10, a.y).lineTo(a.x + 10, a.y).stroke({ color: 0x6a5a38, width: 1.5 })
@@ -580,7 +646,7 @@ export class Renderer {
 
   /** Plop the Blender transmission pylon, re-aiming its cross-arms to the run. */
   private _placePylon(idx: number, col: number, row: number, tile: Tile, pmask: number): void {
-    const meta = this.atlas.meta.get('infra:pylon')
+    const meta = this._atlasMeta('infra:pylon')
     if (!meta) return   // fallback pole is drawn in _drawWires
     const p = new Sprite(meta.texture)
     p.anchor.set(meta.anchorX / meta.frameW, meta.anchorY / meta.frameH)
@@ -620,28 +686,29 @@ export class Renderer {
       const rot = this._roadFacingRot(col, row, tile.footW, tile.footH)
 
       // Pick a base variant (footprint-matched, preferring the current density
-      // bucket then nearest), then append the road-facing rotation. atlas.variants
-      // holds base keys "z:zone:bucket:variant"; meta is keyed by "...:r{rot}".
+      // bucket then nearest), then append the road-facing rotation. Selection
+      // always runs against the 1× atlas so a lot keeps the same variant at
+      // every zoom level; only the final meta lookup is level-dependent.
       const pick = (base: string): SpriteMeta | null =>
-        this.atlas.meta.get(`${base}:r${rot}`) ?? this.atlas.meta.get(`${base}:r0`) ?? null
+        this._atlasMeta(`${base}:r${rot}`) ?? this._atlasMeta(`${base}:r0`)
 
       const buckets = [0, 1, 2].sort((a, b) => Math.abs(a - bucket) - Math.abs(b - bucket))
       for (const b of buckets) {
-        const variants = this.atlas.variants.get(`z:${tile.zone}:${b}`)
+        const variants = this._baseAtlas.variants.get(`z:${tile.zone}:${b}`)
         if (!variants) continue
         const fit = variants.filter((base) => {
-          const m = this.atlas.meta.get(`${base}:r0`)
+          const m = this._baseAtlas.meta.get(`${base}:r0`)
           return m && m.footW === tile.footW && m.footH === tile.footH
         })
         if (fit.length > 0) return pick(fit[variantHash(col, row) % fit.length])
       }
 
       // No art at this footprint anywhere: fall back to any current-bucket variant.
-      const variants = this.atlas.variants.get(`z:${tile.zone}:${bucket}`)
+      const variants = this._baseAtlas.variants.get(`z:${tile.zone}:${bucket}`)
       if (variants && variants.length > 0) return pick(variants[variantHash(col, row) % variants.length])
       return null
     }
-    return this.atlas.meta.get(`b:${tile.building}`) ?? null
+    return this._atlasMeta(`b:${tile.building}`)
   }
 
   /**
@@ -690,17 +757,17 @@ export class Renderer {
       sprite.anchor.set(meta.anchorX / meta.frameW, meta.anchorY / meta.frameH)
       sprite.scale.set(meta.scale)
     } else {
-      const tex = this.texCache.get(getBuildingKey(tile))
-      if (!tex) return
-      sprite = new Sprite(tex)
+      const baked = this._bakedTex(getBuildingKey(tile))
+      if (!baked) return
+      sprite = new Sprite(baked.tex)
       sprite.anchor.set(0.5, BLDG_APEX_Y / BLDG_CANVAS_H)
-      // The procedural texture is baked one tile wide. Scale it up to fill a
-      // multi-tile plot so a placed building matches its footprint (and the hover
-      // preview) instead of sitting as a 1-tile blob in the middle of the plot.
-      // Anchored at the origin tile's north apex, a uniform scale of N grows the
-      // base diamond to the NxN plot with the same apex.
+      // The procedural texture is baked one tile wide (at bakeScale× resolution).
+      // Scale it up to fill a multi-tile plot so a placed building matches its
+      // footprint (and the hover preview) instead of sitting as a 1-tile blob in
+      // the middle of the plot. Anchored at the origin tile's north apex, a
+      // uniform scale of N grows the base diamond to the NxN plot with the same apex.
       const f = Math.max(tile.footW, tile.footH)
-      if (f > 1) sprite.scale.set(f)
+      sprite.scale.set(f / baked.bakeScale)
     }
 
     sprite.x = (col - row) * BASE_HW

@@ -29,17 +29,20 @@ export interface SpriteFrame {
 
 export interface SpriteEntry {
   key: string        // logical key, e.g. "z:1:0:0" or "b:1"
-  frame: SpriteFrame // rect within atlas.png
+  frame: SpriteFrame // rect within the atlas page
   footW: number      // plot width  in tiles
   footH: number      // plot height in tiles
   anchorX: number    // px in frame landing on the plot's north apex
   anchorY: number
   scale: number      // frame-px → world-px multiplier (1.0 if tilePx === 64)
+  page?: number      // index into `images` (default 0)
 }
 
 export interface SpriteManifest {
-  /** Atlas image path, relative to the site root (e.g. "/sprites/atlas.png"). */
+  /** Atlas image path of page 0, relative to the site root (e.g. "/sprites/atlas.png"). */
   image: string
+  /** All atlas page paths; hi-res levels may span several ≤4096px pages. */
+  images?: string[]
   /** Pixels per tile width the sprites were authored at (informational). */
   tilePx: number
   entries: SpriteEntry[]

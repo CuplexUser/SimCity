@@ -1,6 +1,6 @@
 import { type World } from '../core/world'
 import { events, type TickEvent, type YearEvent, type LogEvent } from '../core/events'
-import { stepPower } from './power'
+import { stepPower, type PowerStats } from './power'
 import { stepWater } from './water'
 import { stepZones, type LotSizer } from './zones'
 import { stepCrime } from './crime'
@@ -15,6 +15,8 @@ export class SimManager {
 
   population = 0
   funds      = 20_000
+  /** Zone power coverage from the latest tick — UI reads this for the ⚡ indicator. */
+  power: PowerStats = { powered: 0, unpowered: 0 }
 
   /** Supplied by the renderer once the sprite atlas is known; enables multi-tile lots. */
   private lotSizer?: LotSizer
@@ -28,7 +30,7 @@ export class SimManager {
     const isYearTick = this.tick % TICKS_PER_YEAR === 0
 
     // Run all simulation subsystems
-    stepPower(this.world)
+    this.power = stepPower(this.world)
     stepWater(this.world)
     stepCrime(this.world)
     stepFire(this.world)
@@ -64,5 +66,6 @@ export class SimManager {
     this.tick = state?.tick ?? 0
     this.population = state?.population ?? 0
     this.funds = state?.funds ?? 20_000
+    this.power = { powered: 0, unpowered: 0 }
   }
 }

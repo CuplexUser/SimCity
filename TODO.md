@@ -49,7 +49,7 @@
 - [x] Blender-rendered isometric building sprites — R/C/I at every density stage (Kenney City Kits + modular assembly; R/C/I all have low/mid/high buckets, incl. mid-density residential `z:1:1`)
 - [x] Plopped civic buildings — Blender-assembled from the Kenney Modular kit (`b:3`–`b:7`)
 - [x] Blender-rendered infrastructure sprites — power plants (coal/gas/nuclear/solar/wind), water tower (`b:` keys) and transmission pylons (`infra:pylon` on power-line tiles), built from Blender mesh primitives; roads still draw sidewalk fringe + lane markings procedurally
-- [ ] Sprite atlases packed per zoom level (2×, 4×) — hot-swap via `bakeAllTextures()` key
+- [x] Sprite atlases packed per zoom level (2×, 4×) — atlas.2x/.4x pages (≤4096px, capped at source res) + per-level `bakeAllTextures(scale)`; renderer lazily loads and hot-swaps on zoom
 - [x] Proper terrain texture — Water/Dirt/Forest use per-pixel noise sprites; Grass retains per-tile color variation
 - [x] Animated water tiles — shimmer via per-frame tint oscillation on Water terrain sprites
 - [x] Tile hover highlight — white outline + tint overlay, redrawn on mousemove without full redraw
