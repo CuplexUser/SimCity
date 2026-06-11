@@ -66,7 +66,8 @@ sh.light = 'STUDIO'
 sh.color_type = 'TEXTURE'
 sh.show_shadows = False
 sh.show_cavity = True
-sh.cavity_type = 'WORLD'
+sh.cavity_type = 'WORLD'            # smooth ambient occlusion (screen-space curvature
+                                   # etched facet seams into round tanks/towers — see _bak)
 
 # ── Camera ────────────────────────────────────────────────────────────────────
 cam_data = bpy.data.cameras.new("iso")
@@ -579,28 +580,44 @@ def box(objs, cx, cy, cz, sx, sy, sz, color, rot=(0, 0, 0)):
     return o
 
 
-def cyl(objs, cx, cy, cz, r, h, color, rot=(0, 0, 0), verts=24):
+def _smooth(o, angle_deg=35.0):
+    """Angle-based smooth shading: round walls of cylinders/cones/domes render as
+    curved surfaces while flat caps and the sharp top/bottom edges stay crisp.
+    Without this the primitives read as coarse 24-sided facets."""
+    for p in o.data.polygons:
+        p.use_smooth = True
+    try:                                    # Blender 4.1+: "smooth by angle" modifier
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.shade_auto_smooth(angle=math.radians(angle_deg))
+    except Exception:
+        pass
+
+
+def cyl(objs, cx, cy, cz, r, h, color, rot=(0, 0, 0), verts=48):
     bpy.ops.mesh.primitive_cylinder_add(vertices=verts, radius=r, depth=h, location=(cx, cy, cz))
     o = bpy.context.active_object
     o.rotation_euler = rot
     o.color = (color[0], color[1], color[2], 1.0)
+    _smooth(o)
     objs.append(o)
     return o
 
 
-def cone(objs, cx, cy, cz, r1, r2, h, color, verts=24):
+def cone(objs, cx, cy, cz, r1, r2, h, color, verts=48):
     bpy.ops.mesh.primitive_cone_add(vertices=verts, radius1=r1, radius2=r2, depth=h, location=(cx, cy, cz))
     o = bpy.context.active_object
     o.color = (color[0], color[1], color[2], 1.0)
+    _smooth(o)
     objs.append(o)
     return o
 
 
 def dome(objs, cx, cy, cz, r, color, squash=0.6):
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=r, location=(cx, cy, cz))
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=r, location=(cx, cy, cz))
     o = bpy.context.active_object
     o.scale = (1.0, 1.0, squash)
     o.color = (color[0], color[1], color[2], 1.0)
+    _smooth(o, angle_deg=60.0)
     objs.append(o)
     return o
 
@@ -707,6 +724,67 @@ def build_pylon():
     return objs
 
 
+# Shared water palette so every water utility reads as one family (the in-game
+# water-coverage view, the bluish water-tower roof): a clean blue pipe/tank blue.
+WATER_BLUE = (0.16, 0.50, 0.74)
+WATER_BLUE_DK = (0.11, 0.36, 0.55)
+
+
+def build_water_pump():
+    """Water pump (1x1): a concrete pad, a small brick pump house with a sloped
+    roof, a blue wellhead + intake pipe, a red valve wheel and a vent stack — the
+    upgraded look for the small ground-water pump (replaces the procedural fallback)."""
+    objs = []
+    PAD, BRICK, ROOF, VENT, VALVE = (
+        (0.55, 0.55, 0.57), (0.64, 0.46, 0.36), (0.34, 0.30, 0.30),
+        (0.62, 0.64, 0.66), (0.78, 0.22, 0.18))
+    # Concrete pad the equipment sits on.
+    box(objs, 0.0, 0.0, 0.05, 0.92, 0.92, 0.10, PAD)
+    # Pump house set to the back-left, with a thin darker roof cap.
+    box(objs, -0.16, 0.14, 0.34, 0.46, 0.46, 0.46, BRICK)
+    box(objs, -0.16, 0.14, 0.59, 0.52, 0.52, 0.06, ROOF)
+    # Wellhead: a stubby blue cylinder with a flange, in front of the house.
+    cyl(objs, 0.22, -0.18, 0.22, 0.13, 0.40, WATER_BLUE)
+    cyl(objs, 0.22, -0.18, 0.43, 0.16, 0.05, WATER_BLUE_DK)
+    # Intake pipe running from the wellhead off the front edge of the pad.
+    cyl(objs, 0.22, -0.34, 0.18, 0.08, 0.5, WATER_BLUE, rot=(math.radians(90), 0, 0))
+    # Red valve wheel on the side of the wellhead (thin flat disc facing -Y).
+    cyl(objs, 0.22, -0.05, 0.30, 0.11, 0.03, VALVE, rot=(math.radians(90), 0, 0))
+    # Vent / breather stack on the pump-house roof.
+    cyl(objs, -0.30, 0.20, 0.74, 0.04, 0.34, VENT)
+    return objs
+
+
+def build_pumping_station():
+    """Pumping station (3x3): a long industrial pump hall, two big blue storage
+    tanks with capped tops, connecting pipework, a small control room and roof
+    vents — the large water source (replaces the procedural fallback)."""
+    objs = []
+    PAD, HALL, HALLROOF, CTRL, PIPE, CAP, VENT = (
+        (0.52, 0.52, 0.54), (0.66, 0.68, 0.70), (0.40, 0.44, 0.50),
+        (0.60, 0.62, 0.64), (0.55, 0.58, 0.62), (0.70, 0.74, 0.78), (0.46, 0.48, 0.50))
+    # Site pad.
+    box(objs, 0.0, 0.0, 0.04, 2.9, 2.9, 0.08, PAD)
+    # Main pump hall along the back, with a banded roof slab.
+    box(objs, -0.2, 0.7, 0.55, 2.4, 1.0, 1.0, HALL)
+    box(objs, -0.2, 0.7, 1.08, 2.5, 1.1, 0.12, HALLROOF)
+    # Roof vents on the hall.
+    for vx in (-0.9, 0.0, 0.9):
+        box(objs, vx - 0.2, 0.7, 1.22, 0.22, 0.5, 0.16, VENT)
+    # Small control room jutting from the front of the hall.
+    box(objs, -1.05, -0.1, 0.40, 0.7, 0.7, 0.7, CTRL)
+    box(objs, -1.05, -0.1, 0.78, 0.78, 0.78, 0.06, HALLROOF)
+    # Two big blue water tanks at the front, with darker bases and bright caps.
+    for tx in (0.35, 1.15):
+        cyl(objs, tx, -0.55, 0.12, 0.5, 0.24, WATER_BLUE_DK)   # plinth
+        cyl(objs, tx, -0.55, 0.72, 0.48, 1.05, WATER_BLUE)     # tank body
+        cyl(objs, tx, -0.55, 1.27, 0.50, 0.10, CAP)            # capped top
+    # Pipework: a header pipe linking the two tanks, and a feed into the hall.
+    cyl(objs, 0.75, -0.55, 0.45, 0.07, 0.85, PIPE, rot=(0, math.radians(90), 0))
+    cyl(objs, 0.35, 0.05, 0.45, 0.07, 0.7, PIPE, rot=(math.radians(90), 0, 0))
+    return objs
+
+
 # (key, name, foot, builder) — power plants/water tower keyed b:{enum}, pylon its own.
 INFRA = [
     ("b:1",  "infra_coal",    4, build_coal),
@@ -715,6 +793,8 @@ INFRA = [
     ("b:10", "infra_solar",   3, build_solar),
     ("b:11", "infra_wind",    1, build_wind),
     ("b:2",  "infra_water",   2, build_water),
+    ("b:12", "infra_water_pump",     1, build_water_pump),
+    ("b:13", "infra_pumping_station", 3, build_pumping_station),
     ("infra:pylon", "infra_pylon", 1, build_pylon),
 ]
 

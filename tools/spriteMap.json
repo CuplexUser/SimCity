@@ -2366,5 +2366,21 @@
     "anchorX": 244,
     "anchorY": 273,
     "tilePx": 136
+  },
+  "infra_water_pump.png": {
+    "key": "b:12",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 128,
+    "anchorY": 138,
+    "tilePx": 233
+  },
+  "infra_pumping_station.png": {
+    "key": "b:13",
+    "footW": 3,
+    "footH": 3,
+    "anchorX": 224,
+    "anchorY": 184,
+    "tilePx": 136
   }
 }
