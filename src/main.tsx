@@ -11,7 +11,7 @@ import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolb
 import { BottomBar } from './ui/BottomBar'
 import { CityLog } from './ui/CityLog'
 import { SpeedControl } from './ui/SpeedControl'
-import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST, buildingFootprint } from './data/buildings'
+import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST, buildingFootprint, allowsRoadUnder } from './data/buildings'
 import { canPlaceFootprint, placeFootprint } from './core/footprint'
 import { Minimap } from './rendering/minimap'
 
@@ -35,15 +35,18 @@ function App() {
   const [pop,    setPop]    = useState(0)
   const [funds,  setFunds]  = useState(20_000)
   const [power,  setPower]  = useState({ powered: 0, unpowered: 0 })
+  const [water,  setWater]  = useState({ watered: 0, unwatered: 0 })
   const [speed,  setSpeed]  = useState(1)
   const [optionsStatus, setOptionsStatus] = useState('')
   const [cityName, setCityName] = useState('New City')
   const [savedCities, setSavedCities] = useState<string[]>([])
   const [nightMode, setNightMode] = useState(false)
   const [showZoneOverlay, setShowZoneOverlay] = useState(false)
+  const [showWaterOverlay, setShowWaterOverlay] = useState(false)
 
   const nightModeRef      = useRef(false)
   const zoneOverlayRef    = useRef(false)
+  const waterOverlayRef   = useRef(false)
 
   useEffect(() => {
     toolRef.current = activeKey ? keyToTool(activeKey) : null
@@ -67,12 +70,19 @@ function App() {
     engineRef.current?.renderer?.setZoneOverlay(on)
   }
 
+  function handleWaterOverlay(on: boolean) {
+    waterOverlayRef.current = on
+    setShowWaterOverlay(on)
+    engineRef.current?.renderer?.setWaterOverlay(on)
+  }
+
   function resetUiState(yearValue = 2000, populationValue = 0, fundsValue = 20_000) {
     fundsRef.current = fundsValue
     setYear(yearValue)
     setPop(populationValue)
     setFunds(fundsValue)
     setPower({ powered: 0, unpowered: 0 })
+    setWater({ watered: 0, unwatered: 0 })
     setActiveKey(null)
   }
 
@@ -292,7 +302,8 @@ function App() {
         case 'building': {
           const [fw, fh] = buildingFootprint(tool.building)
           // The clicked tile is the plot's NW/origin corner; the whole plot must be clear.
-          if (!canPlaceFootprint(eng.world, col, row, fw, fh)) return
+          // Utility structures (power/water) may sit over existing roads — they run under.
+          if (!canPlaceFootprint(eng.world, col, row, fw, fh, allowsRoadUnder(tool.building))) return
           const def = BUILDING_DEFS[tool.building]
           if (!spendFunds(def.cost)) return
           placeFootprint(eng.world, col, row, fw, fh, {
@@ -346,6 +357,8 @@ function App() {
       const t = eng.world.get(col, row)
       if (t.overlay & overlay)          return 'skip'
       if (t.building !== Building.None) return 'blocked'
+      // A building's allocated plot (covered footprint tiles) is reserved — no roads.
+      if (t.rootCol !== -1 || t.rootRow !== -1) return 'blocked'
       if (kind === 'road' && (t.density > 0 || t.terrain === Terrain.Water)) return 'blocked'
       if (!spendFunds(OVERLAY_COST[overlay] ?? 0)) return 'blocked'
       eng.world.set(col, row, { overlay: t.overlay | overlay })
@@ -510,6 +523,7 @@ function App() {
         case '-': case '_':  eng.camera.snapZoom( 1, canvas.width / 2, canvas.height / 2); break
         case 'n': case 'N':  handleNightMode(!nightModeRef.current);                    break
         case 'v': case 'V':  handleZoneOverlay(!zoneOverlayRef.current);                break
+        case 'c': case 'C':  handleWaterOverlay(!waterOverlayRef.current);              break
       }
     }
 
@@ -522,6 +536,10 @@ function App() {
     const offTick = events.on<TickEvent>('tick', () => {
       setPop(eng.sim.population)
       setPower({ ...eng.sim.power })
+      setWater({ ...eng.sim.water })
+      // Coverage flags change inside the sim step (not via world.set), so refresh
+      // the live water-coverage view each tick while it's showing.
+      if (waterOverlayRef.current) eng.renderer?.markWaterLayerDirty()
     })
 
     const offYear = events.on<YearEvent>('year', ({ year, revenue, expenses }) => {
@@ -578,8 +596,10 @@ function App() {
         onNightMode={handleNightMode}
         showZoneOverlay={showZoneOverlay}
         onZoneOverlay={handleZoneOverlay}
+        showWaterOverlay={showWaterOverlay}
+        onWaterOverlay={handleWaterOverlay}
       />
-      <BottomBar year={year} population={pop} funds={funds} power={power} />
+      <BottomBar year={year} population={pop} funds={funds} power={power} water={water} />
       <SpeedControl speed={speed} onSpeedChange={handleSpeedChange} />
       <CityLog />
     </div>

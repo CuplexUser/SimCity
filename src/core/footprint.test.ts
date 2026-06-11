@@ -28,6 +28,33 @@ describe('footprint helpers', () => {
     expect(canPlaceFootprint(w3, 5, 5, 3, 3)).toBe(false)
   })
 
+  it('allowRoadUnder lets a utility plot sit over roads (but never over buildings/water)', () => {
+    const world = new World()
+    world.set(6, 6, { overlay: Overlay.Road })
+    // Roads under the plot are fine for a utility…
+    expect(canPlaceFootprint(world, 5, 5, 3, 3, true)).toBe(true)
+    // …but the same plot is still rejected for a non-utility (default false).
+    expect(canPlaceFootprint(world, 5, 5, 3, 3)).toBe(false)
+
+    // Even with allowRoadUnder, a building or water tile still blocks placement.
+    const w2 = new World()
+    w2.set(6, 6, { building: Building.PoliceStation })
+    expect(canPlaceFootprint(w2, 5, 5, 3, 3, true)).toBe(false)
+    const w3 = new World()
+    w3.set(6, 6, { terrain: Terrain.Water })
+    expect(canPlaceFootprint(w3, 5, 5, 3, 3, true)).toBe(false)
+  })
+
+  it('placeFootprint preserves an underlying road overlay (roads run under utilities)', () => {
+    const world = new World()
+    world.set(5, 5, { overlay: Overlay.Road })
+    world.set(6, 6, { overlay: Overlay.Road })
+    placeFootprint(world, 5, 5, 3, 3, { building: Building.PowerPlant, zone: Zone.None })
+    // Origin and covered tiles keep their road overlay so the grid stays connected.
+    expect(world.get(5, 5).overlay & Overlay.Road).toBeTruthy()
+    expect(world.get(6, 6).overlay & Overlay.Road).toBeTruthy()
+  })
+
   it('placeFootprint marks origin + covered tiles', () => {
     const world = new World()
     placeFootprint(world, 4, 4, 3, 2, { building: Building.PowerPlant, zone: Zone.None })

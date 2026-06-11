@@ -33,6 +33,9 @@ export enum Building {
   Nuclear       = 9,   // nuclear plant — 80-tile range, very expensive
   SolarFarm     = 10,  // solar array — 30-tile range, no fuel upkeep
   WindTurbine   = 11,  // wind turbine — 25-tile range, cheap
+  // Water sources — varying cost, range, and footprint (mirror the power plants)
+  WaterPump     = 12,  // small ground pump — 12-tile range, cheap
+  PumpingStation= 13,  // large pumping station — 45-tile range, big footprint
 }
 
 export interface Tile {

@@ -19,7 +19,7 @@ describe('stepZones', () => {
 
   it('counts residential population as density * 10', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 4, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 4, powered: true, watered: true })
     world.set(5, 4, { overlay: Overlay.Road })
     const { population } = stepZones(world, false)
     expect(population).toBe(40)
@@ -27,7 +27,7 @@ describe('stepZones', () => {
 
   it('residential density grows on year tick when powered + connected road access', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
     // Two-tile road segment satisfies isRoadConnected(..., 1)
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
@@ -37,7 +37,7 @@ describe('stepZones', () => {
 
   it('residential density grows when a road is two tiles away', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
     world.set(5, 7, { overlay: Overlay.Road })
     world.set(5, 8, { overlay: Overlay.Road })
     stepZones(world, true)
@@ -49,7 +49,7 @@ describe('stepZones', () => {
 
     for (let row = 4; row <= 6; row++) {
       for (let col = 4; col <= 6; col++) {
-        world.set(col, row, { zone: Zone.Residential, density: 1, powered: true })
+        world.set(col, row, { zone: Zone.Residential, density: 1, powered: true, watered: true })
       }
     }
 
@@ -68,7 +68,7 @@ describe('stepZones', () => {
 
   it('density does not grow when the nearest road is three tiles away', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
     world.set(5, 8, { overlay: Overlay.Road })
     world.set(5, 9, { overlay: Overlay.Road })
     stepZones(world, true)
@@ -83,9 +83,18 @@ describe('stepZones', () => {
     expect(world.get(5, 5).density).toBe(1)
   })
 
+  it('density does not grow without water', () => {
+    const world = new World()
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: false })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(1)
+  })
+
   it('density does not grow without road access', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
     // No road nearby — stays at density 1
     stepZones(world, true)
     expect(world.get(5, 5).density).toBe(1)
@@ -93,7 +102,7 @@ describe('stepZones', () => {
 
   it('density does not grow with an isolated single-tile road (stub)', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
     // Single isolated road tile fails isRoadConnected check
     world.set(5, 6, { overlay: Overlay.Road })
     stepZones(world, true)
@@ -102,7 +111,7 @@ describe('stepZones', () => {
 
   it('density caps at 8', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 8, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 8, powered: true, watered: true })
     world.set(5, 6, { overlay: Overlay.Road })
     stepZones(world, true)
     expect(world.get(5, 5).density).toBe(8)
@@ -110,7 +119,7 @@ describe('stepZones', () => {
 
   it('a road overlay on the tile itself counts when connected to another road', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, overlay: Overlay.Road })
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true, overlay: Overlay.Road })
     world.set(5, 6, { overlay: Overlay.Road })  // makes the on-tile road connected
     stepZones(world, true)
     expect(world.get(5, 5).density).toBe(2)
@@ -119,8 +128,8 @@ describe('stepZones', () => {
   it('commercial grows only when population base is sufficient', () => {
     const world = new World()
     // Very small population — commercial demand should be false
-    world.set(0, 0, { zone: Zone.Residential, density: 1, powered: true })
-    world.set(0, 1, { zone: Zone.Commercial,  density: 0, powered: true })
+    world.set(0, 0, { zone: Zone.Residential, density: 1, powered: true, watered: true })
+    world.set(0, 1, { zone: Zone.Commercial,  density: 0, powered: true, watered: true })
     world.set(0, 2, { overlay: Overlay.Road })
     world.set(0, 3, { overlay: Overlay.Road })  // connected road segment
     stepZones(world, true)
@@ -132,7 +141,7 @@ describe('stepZones', () => {
     const world = new World()
     for (let row = 5; row <= 6; row++) {
       for (let col = 5; col <= 6; col++) {
-        world.set(col, row, { zone: Zone.Residential, density: 0, powered: true })
+        world.set(col, row, { zone: Zone.Residential, density: 0, powered: true, watered: true })
       }
     }
     world.set(5, 4, { overlay: Overlay.Road })
@@ -156,7 +165,7 @@ describe('stepZones', () => {
     const world = new World()
     for (let row = 5; row <= 6; row++) {
       for (let col = 5; col <= 6; col++) {
-        world.set(col, row, { zone: Zone.Residential, density: 0, powered: true })
+        world.set(col, row, { zone: Zone.Residential, density: 0, powered: true, watered: true })
       }
     }
     world.set(5, 4, { overlay: Overlay.Road })
@@ -180,7 +189,7 @@ describe('stepZones', () => {
 
   it('small-town residential stays low-rise (density caps at 2)', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true, watered: true })
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
     stepZones(world, true) // population ≈ 20 → stage 0
@@ -191,9 +200,9 @@ describe('stepZones', () => {
     const world = new World()
     // 50 filler lots × density 2 × 10 = 1,000 population → residential mid stage
     for (let i = 0; i < 50; i++) {
-      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true })
+      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true, watered: true })
     }
-    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true, watered: true })
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
     stepZones(world, true)
@@ -205,9 +214,9 @@ describe('stepZones', () => {
     // 60 filler lots → 1,200 population: above residential mid (1,000) but
     // below commercial mid (2,000); commercial demand itself is satisfied.
     for (let i = 0; i < 60; i++) {
-      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true })
+      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true, watered: true })
     }
-    world.set(5, 5, { zone: Zone.Commercial, density: 2, powered: true })
+    world.set(5, 5, { zone: Zone.Commercial, density: 2, powered: true, watered: true })
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
     stepZones(world, true)
@@ -218,7 +227,7 @@ describe('stepZones', () => {
     const makeBlock = (world: World) => {
       for (let row = 5; row <= 7; row++) {
         for (let col = 5; col <= 7; col++) {
-          world.set(col, row, { zone: Zone.Residential, density: 0, powered: true })
+          world.set(col, row, { zone: Zone.Residential, density: 0, powered: true, watered: true })
         }
       }
       world.set(5, 4, { overlay: Overlay.Road })
@@ -236,7 +245,7 @@ describe('stepZones', () => {
     const mid = new World()
     makeBlock(mid)
     for (let i = 0; i < 50; i++) {
-      mid.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true })
+      mid.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true, watered: true })
     }
     stepZones(mid, true, () => [3])
     expect(mid.get(5, 5).footW).toBe(3)
@@ -245,7 +254,7 @@ describe('stepZones', () => {
 
   it('non-year ticks do not change density', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
     world.set(5, 6, { overlay: Overlay.Road })
     stepZones(world, false)
     expect(world.get(5, 5).density).toBe(1)

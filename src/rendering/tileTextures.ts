@@ -95,6 +95,7 @@ export function bakeAllTextures(scale = 1): TextureCache {
   const allBldgs: Building[] = [
     Building.PowerPlant, Building.GasTurbine, Building.Nuclear,
     Building.SolarFarm,  Building.WindTurbine, Building.WaterTower,
+    Building.WaterPump,  Building.PumpingStation,
     Building.PoliceStation, Building.FireStation, Building.Hospital,
     Building.School, Building.Library,
   ]

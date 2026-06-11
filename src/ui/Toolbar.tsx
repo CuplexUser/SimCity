@@ -4,7 +4,7 @@ import { Zone, Building, type ActiveTool, type BulldozeMode } from '../core/tile
 export type ToolKey =
   | 'R' | 'C' | 'I'
   | 'PP' | 'GT' | 'NP' | 'SF' | 'WN'
-  | 'WT' | 'PS' | 'FS' | 'HP' | 'SC' | 'LB'
+  | 'WT' | 'WP' | 'PM' | 'PS' | 'FS' | 'HP' | 'SC' | 'LB'
   | 'road' | 'power'
   | 'dozeNormal' | 'dozeTerrain' | 'dozeZoning'
 
@@ -18,6 +18,8 @@ export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'SF')   return { kind: 'building', building: Building.SolarFarm }
   if (key === 'WN')   return { kind: 'building', building: Building.WindTurbine }
   if (key === 'WT')   return { kind: 'building', building: Building.WaterTower }
+  if (key === 'WP')   return { kind: 'building', building: Building.WaterPump }
+  if (key === 'PM')   return { kind: 'building', building: Building.PumpingStation }
   if (key === 'PS')   return { kind: 'building', building: Building.PoliceStation }
   if (key === 'FS')   return { kind: 'building', building: Building.FireStation }
   if (key === 'HP')   return { kind: 'building', building: Building.Hospital }
@@ -70,6 +72,8 @@ const POWER_BTNS: ToolBtn[] = [
 
 const SERVICE_BTNS: ToolBtn[] = [
   { key: 'WT', label: 'Water Tower ($500)',     bg: '#0a1e2a', title: 'Water Tower [W]' },
+  { key: 'WP', label: 'Water Pump ($300)',      bg: '#0a222a', title: 'Water Pump — small, cheap, short range' },
+  { key: 'PM', label: 'Pumping Station ($4,000)', bg: '#08283a', title: 'Pumping Station — large footprint, long range' },
   { key: 'PS', label: 'Police Station ($1,000)',bg: '#0a1230', title: 'Police Station [O]' },
   { key: 'FS', label: 'Fire Station ($1,000)',  bg: '#2a0a0a', title: 'Fire Station' },
   { key: 'HP', label: 'Hospital ($1,500)',      bg: '#0a1a0a', title: 'Hospital' },
@@ -91,7 +95,7 @@ const DOZE_BTNS: ToolBtn[] = [
 const TOOL_ICONS: Partial<Record<ToolKey, string>> = {
   R: '🏘', C: '🏢', I: '🏭',
   PP: '🏭', GT: '💨', NP: '⚛', SF: '☀', WN: '🌬',
-  WT: '💧', PS: '🚔', FS: '🚒', HP: '🏥', SC: '🏫', LB: '📚',
+  WT: '💧', WP: '🚰', PM: '🏗', PS: '🚔', FS: '🚒', HP: '🏥', SC: '🏫', LB: '📚',
   road: '━', power: '⚡',
   dozeNormal: '🔨', dozeTerrain: '⛏', dozeZoning: '✂',
 }
@@ -99,7 +103,7 @@ const TOOL_ICONS: Partial<Record<ToolKey, string>> = {
 function categoryForKey(key: ToolKey): CategoryId {
   if (['R', 'C', 'I'].includes(key)) return 'zones'
   if (['PP', 'GT', 'NP', 'SF', 'WN'].includes(key)) return 'power'
-  if (['WT', 'PS', 'FS', 'HP', 'SC', 'LB'].includes(key)) return 'services'
+  if (['WT', 'WP', 'PM', 'PS', 'FS', 'HP', 'SC', 'LB'].includes(key)) return 'services'
   if (['road', 'power'].includes(key)) return 'roads'
   return 'doze'
 }
@@ -121,6 +125,8 @@ interface Props {
   onNightMode:     (on: boolean) => void
   showZoneOverlay: boolean
   onZoneOverlay:   (on: boolean) => void
+  showWaterOverlay: boolean
+  onWaterOverlay:   (on: boolean) => void
 }
 
 export function Toolbar({
@@ -128,6 +134,7 @@ export function Toolbar({
   onNewGame, onSaveState, onLoadState, onExportFile, onImportFile, onOptionsOpen,
   cityName, onCityNameChange, savedCities, status,
   nightMode, onNightMode, showZoneOverlay, onZoneOverlay,
+  showWaterOverlay, onWaterOverlay,
 }: Props) {
   const [openCat, setOpenCat] = useState<CategoryId | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -241,8 +248,9 @@ export function Toolbar({
     if (openCat === 'roads')    return ROAD_BTNS.map(toolBtn)
     if (openCat === 'doze')     return DOZE_BTNS.map(toolBtn)
     if (openCat === 'view') return [
-      toggleBtn('Night Mode',     nightMode,       onNightMode,     'Toggle night mode [N]'),
-      toggleBtn('Zone Overlay',   showZoneOverlay, onZoneOverlay,   'Show zone color overlay [V]'),
+      toggleBtn('Night Mode',     nightMode,        onNightMode,     'Toggle night mode [N]'),
+      toggleBtn('Zone Overlay',   showZoneOverlay,  onZoneOverlay,   'Show zone color overlay [V]'),
+      toggleBtn('Water Coverage', showWaterOverlay, onWaterOverlay,  'Show water coverage: blue = served, red = dry zones needing a water utility [C]'),
     ]
     return null
   }

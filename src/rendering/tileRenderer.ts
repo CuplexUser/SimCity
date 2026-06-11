@@ -1029,6 +1029,35 @@ export function drawBuilding(
       break
     }
 
+    case Building.WaterPump: {
+      // Small pump house with a stubby intake pipe and a blue valve wheel.
+      drawIsoBox(ctx, cx, cy, hw, hh, 0.58, hh * 0.85, '#6a7d8a', '#445660', '#566c78')
+      // Intake pipe rising from the roof
+      const pw = Math.max(2, hw * 0.10)
+      ctx.fillStyle = '#3a7eb2'
+      ctx.fillRect(cx - pw / 2, cy - hh * 0.95, pw, hh * 0.95)
+      // Valve wheel
+      ctx.strokeStyle = '#5aa8d8'; ctx.lineWidth = Math.max(1, hw * 0.04)
+      ctx.beginPath(); ctx.arc(cx, cy - hh * 0.95, Math.max(2, hw * 0.12), 0, Math.PI * 2); ctx.stroke()
+      break
+    }
+
+    case Building.PumpingStation: {
+      // Large industrial water works: long hall flanked by two cylindrical tanks.
+      drawIsoBox(ctx, cx, cy, hw, hh, 0.86, hh * 1.5, '#7d8a92', '#505c64', '#646e76')
+      drawFloorLines(ctx, cx, cy, hw, hh, 0.86, hh * 1.5, 2)
+      // Two water storage tanks on the roof
+      for (const dx of [-hw * 0.30, hw * 0.34]) {
+        const tcx = cx + dx, tcy = cy - hh * 0.55
+        drawIsoBox(ctx, tcx, tcy, hw, hh, 0.30, hh * 1.0, '#4a90c4', '#2a6a9a', '#3a7eb2')
+        ctx.fillStyle = '#5aa8d8'
+        ctx.beginPath()
+        ctx.ellipse(tcx, tcy + hh * (1 - 0.30) - hh * 1.0, hw * 0.30, hh * 0.20, 0, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      break
+    }
+
     case Building.PoliceStation: {
       drawIsoBox(ctx, cx, cy, hw, hh, 0.80, hh * 1.7, '#5566cc', '#2e3ea8', '#3e4ebc')
       drawFloorLines(ctx, cx, cy, hw, hh, 0.80, hh * 1.7, 2)

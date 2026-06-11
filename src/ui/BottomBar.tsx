@@ -4,9 +4,11 @@ interface Props {
   funds:      number
   /** Zone power coverage from the sim (powered / unpowered zoned tiles). */
   power:      { powered: number; unpowered: number }
+  /** Zone water coverage from the sim (watered / unwatered zoned tiles). */
+  water:      { watered: number; unwatered: number }
 }
 
-export function BottomBar({ year, population, funds, power }: Props) {
+export function BottomBar({ year, population, funds, power, water }: Props) {
   const fundsColor = funds >= 0 ? '#5aee5a' : '#ee5555'
 
   const zoneTiles  = power.powered + power.unpowered
@@ -17,6 +19,15 @@ export function BottomBar({ year, population, funds, power }: Props) {
   const powerTitle = power.unpowered > 0
     ? 'Zoned tiles without power cannot grow — build a power plant nearby or extend power lines'
     : 'All zoned tiles have power'
+
+  const waterTiles = water.watered + water.unwatered
+  const waterColor = water.unwatered === 0 ? '#5aee5a' : '#ee5555'
+  const waterText  = waterTiles === 0 ? '—'
+    : water.unwatered === 0 ? 'OK'
+    : `${water.unwatered} zone${water.unwatered === 1 ? '' : 's'} dry`
+  const waterTitle = water.unwatered > 0
+    ? 'Zoned tiles without water cannot grow — build a water tower, pump, or pumping station nearby'
+    : 'All zoned tiles have water'
 
   return (
     <div style={{
@@ -44,6 +55,9 @@ export function BottomBar({ year, population, funds, power }: Props) {
       </span>
       <span title={powerTitle}>
         ⚡ <strong style={{ color: zoneTiles === 0 ? '#888' : powerColor }}>{powerText}</strong>
+      </span>
+      <span title={waterTitle}>
+        💧 <strong style={{ color: waterTiles === 0 ? '#888' : waterColor }}>{waterText}</strong>
       </span>
     </div>
   )

@@ -50,8 +50,15 @@ export function footprintTiles(world: World, col: number, row: number): Array<[n
  * Can a fresh `w×h` plot be placed with its origin at (col,row)?
  * Every covered tile must be in-bounds, on land (not Water), and empty:
  * no building, no density, no existing footprint root, and no road.
+ *
+ * `allowRoadUnder` (utility structures like power plants / water sources) lets the
+ * plot sit on top of existing road/power-line overlays — they stay under the
+ * building so the grid keeps connecting through them.
  */
-export function canPlaceFootprint(world: World, col: number, row: number, w: number, h: number): boolean {
+export function canPlaceFootprint(
+  world: World, col: number, row: number, w: number, h: number,
+  allowRoadUnder = false,
+): boolean {
   for (let r = row; r < row + h; r++) {
     for (let c = col; c < col + w; c++) {
       if (!world.inBounds(c, r)) return false
@@ -60,8 +67,9 @@ export function canPlaceFootprint(world: World, col: number, row: number, w: num
       if (t.building !== Building.None) return false
       if (t.density > 0) return false
       if (t.rootCol !== -1 || t.rootRow !== -1) return false
-      // Roads/power overlays block plopping (structures need their own ground).
-      if (t.overlay !== 0) return false
+      // Roads/power overlays block plopping (structures need their own ground),
+      // unless this is a utility that explicitly allows roads to run underneath.
+      if (t.overlay !== 0 && !allowRoadUnder) return false
     }
   }
   return true

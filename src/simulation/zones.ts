@@ -70,7 +70,8 @@ export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer
         (tile.zone === Zone.Industrial  && iDemand)
 
       const stage = devStage(tile.zone, prevPop)
-      if (!(demand && tile.density < STAGE_DENSITY_CAP[stage] && tile.powered && hasRoadAccess(world, col, row))) return
+      // Growth needs both utilities (power + water) plus connected road access.
+      if (!(demand && tile.density < STAGE_DENSITY_CAP[stage] && tile.powered && tile.watered && hasRoadAccess(world, col, row))) return
 
       // First development on a vacant plot may claim a multi-tile lot from
       // contiguous same-zone vacant neighbors (only when art sizes are known).

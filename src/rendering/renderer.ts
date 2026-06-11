@@ -110,6 +110,7 @@ export class Renderer {
 
   // Fixed-zIndex overlay layers inside worldContainer
   private zoneLayerGfx!: Graphics   // zone outlines (+ fills when overlay enabled)
+  private waterLayerGfx!: Graphics  // water-coverage view (blue = served, red = dry zone)
   private hoverGfx!: Graphics       // hover highlight
   private _hoverW = 1               // footprint width  of the hovered placement
   private _hoverH = 1               // footprint height of the hovered placement
@@ -121,11 +122,13 @@ export class Renderer {
   private nightOverlay!: Graphics
 
   // State flags
-  private _nightMode       = false
-  private _showZoneOverlay = false
-  private _hoverIdx        = -1
-  private _zoneLayerDirty  = true    // rebuild on first draw
-  private _waterListDirty  = true    // rebuild on first draw
+  private _nightMode        = false
+  private _showZoneOverlay  = false
+  private _showWaterOverlay = false
+  private _hoverIdx         = -1
+  private _zoneLayerDirty   = true    // rebuild on first draw
+  private _waterLayerDirty  = true    // water-coverage view geometry
+  private _waterListDirty   = true    // rebuild on first draw
 
   // Minimap
   private minimapHtmlCanvas!: HTMLCanvasElement
@@ -220,6 +223,11 @@ export class Renderer {
     this.zoneLayerGfx.zIndex = 60000
     this.worldContainer.addChild(this.zoneLayerGfx)
 
+    this.waterLayerGfx = new Graphics()
+    this.waterLayerGfx.zIndex = 61000   // above zone layer; below hover
+    this.waterLayerGfx.visible = false
+    this.worldContainer.addChild(this.waterLayerGfx)
+
     this.hoverGfx = new Graphics()
     this.hoverGfx.zIndex = 80000
     this.worldContainer.addChild(this.hoverGfx)
@@ -297,11 +305,7 @@ export class Renderer {
         const row = Math.floor(idx / world.cols)
         this._destroyTerrainLayers(idx)
         this._createTerrainLayers(col, row)
-        this._rebuildBuilding(col, row)
-        if (this._nightMode) {
-          const s = this.buildingSprites[idx]
-          if (s) s.tint = 0xffcc77
-        }
+        this._rebuildBuilding(col, row)   // applies night / zone-overlay tint itself
       }
 
       for (const idx of overlayIdxs) {
@@ -313,12 +317,14 @@ export class Renderer {
       world.dirty.clear()
       this.worldContainer.sortChildren()
 
-      // Tile changes may affect zone layer and water list
-      this._zoneLayerDirty = true
-      this._waterListDirty = true
+      // Tile changes may affect zone layer, water coverage view, and water list
+      this._zoneLayerDirty  = true
+      this._waterLayerDirty = true
+      this._waterListDirty  = true
     }
 
     if (this._zoneLayerDirty) this._rebuildZoneLayer()
+    if (this._showWaterOverlay && this._waterLayerDirty) this._rebuildWaterLayer()
     if (this._waterListDirty) this._rebuildWaterList()
 
     // Animate water tiles (shimmer via tint oscillation, every frame)
@@ -382,7 +388,7 @@ export class Renderer {
     if (on === this._nightMode) return
     this._nightMode = on
     this._resizeNightOverlay()
-    this._applyNightTintToBuildings(on)
+    this._refreshBuildingTints()
   }
 
   /**
@@ -408,6 +414,45 @@ export class Renderer {
     if (on === this._showZoneOverlay) return
     this._showZoneOverlay = on
     this._zoneLayerDirty  = true
+    // Tint developed lots by their zone color so zones read through the buildings.
+    this._refreshBuildingTints()
+  }
+
+  /** Toggle the water-coverage view: blue where a source reaches, red over zoned
+   *  tiles that are dry (i.e. where a new water utility is needed). */
+  setWaterOverlay(on: boolean): void {
+    if (on === this._showWaterOverlay) return
+    this._showWaterOverlay = on
+    this._waterLayerDirty  = true
+    this.waterLayerGfx.visible = on
+    if (!on) this.waterLayerGfx.clear()
+  }
+
+  /** Coverage flags (tile.watered) change during sim steps without going through
+   *  world.set, so the UI pokes this each tick to refresh the live view. */
+  markWaterLayerDirty(): void {
+    this._waterLayerDirty = true
+  }
+
+  /** Tint for a building/lot sprite: zone color when the zone overlay is on (so a
+   *  developed lot shows its zone through the building), warm glow at night,
+   *  otherwise none. Plopped (non-zone) buildings keep the night/neutral tint. */
+  private _buildingTint(tile: Tile): number {
+    if (this._showZoneOverlay && tile.density > 0 && tile.zone !== Zone.None) {
+      return zoneOutlineHex(tile.zone)
+    }
+    return this._nightMode ? 0xffcc77 : 0xffffff
+  }
+
+  /** Re-apply _buildingTint to every existing building sprite (after a night /
+   *  zone-overlay toggle) without rebuilding the sprites. */
+  private _refreshBuildingTints(): void {
+    this.world.forEach((tile, col, row) => {
+      const s = this.buildingSprites[this._idx(col, row)]
+      if (s) s.tint = this._buildingTint(tile)
+    })
+    // Pylons follow night mode only (they carry no zone).
+    for (const s of this.pylonSprites) { if (s) s.tint = this._nightMode ? 0xffcc77 : 0xffffff }
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────
@@ -776,7 +821,7 @@ export class Renderer {
     // anything behind them and tuck behind anything in front.
     const frontD = (col + tile.footW - 1) + (row + tile.footH - 1)
     sprite.zIndex = frontD * 3 + 2
-    if (this._nightMode) sprite.tint = 0xffcc77
+    sprite.tint = this._buildingTint(tile)
 
     this.buildingSprites[idx] = sprite
     this.worldContainer.addChild(sprite)
@@ -803,19 +848,65 @@ export class Renderer {
         x - hw * s,  y + hh,
       ]
 
-      if (this._showZoneOverlay) {
-        // Semi-transparent colored fill over all zoned tiles
-        const alpha = tile.density === 0 ? 0.22 : 0.12
-        g.poly(pts).fill({ color: zoneOutlineHex(tile.zone), alpha })
-      }
+      const color = zoneOutlineHex(tile.zone)
 
-      // Solid outline only for vacant (density 0) zones
-      if (tile.density === 0) {
-        g.poly(pts).stroke({ color: zoneOutlineHex(tile.zone), width: 1.5 })
+      if (this._showZoneOverlay) {
+        // Bold colored fill + outline over every zoned tile so the overlay reads
+        // clearly even where a building sits on the plot (the building sprite is
+        // additionally tinted by zone — see _buildingTint).
+        const alpha = tile.density === 0 ? 0.40 : 0.32
+        g.poly(pts).fill({ color, alpha })
+        g.poly(pts).stroke({ color, width: 2, alpha: 0.85 })
+      } else if (tile.density === 0) {
+        // Default (overlay off): solid outline only for vacant (density 0) zones.
+        g.poly(pts).stroke({ color, width: 1.5 })
       }
     })
 
     this._zoneLayerDirty = false
+  }
+
+  // ── Water-coverage view ─────────────────────────────────────────────────────
+  // A single Graphics tinting each tile by its water status, so the player can see
+  // exactly how far the current sources reach and which zones still need water.
+  //   blue   = served (within a source's range)
+  //   red    = a zoned tile that is dry → drop a new water utility near here
+  // Source buildings (always served) get a brighter ring so their hubs stand out.
+
+  private static WATER_SOURCES = new Set<Building>([
+    Building.WaterTower, Building.WaterPump, Building.PumpingStation,
+  ])
+
+  private _rebuildWaterLayer(): void {
+    const g  = this.waterLayerGfx
+    const hw = BASE_HW, hh = BASE_HH
+    g.clear()
+
+    this.world.forEach((tile, col, row) => {
+      const x = (col - row) * hw
+      const y = (col + row) * hh - tile.elevation * BASE_EH
+      const s = 0.94
+      const pts = [
+        x,          y + hh * (1 - s),
+        x + hw * s, y + hh,
+        x,          y + hh * (1 + s),
+        x - hw * s, y + hh,
+      ]
+
+      if (tile.watered) {
+        g.poly(pts).fill({ color: 0x35a7e0, alpha: 0.30 })
+      } else if (tile.zone !== Zone.None) {
+        // A zoned tile with no water — the actionable gap.
+        g.poly(pts).fill({ color: 0xff4040, alpha: 0.38 })
+        g.poly(pts).stroke({ color: 0xff6060, width: 1, alpha: 0.6 })
+      }
+
+      if (Renderer.WATER_SOURCES.has(tile.building)) {
+        g.poly(pts).stroke({ color: 0xbfeaff, width: 2.4, alpha: 0.95 })
+      }
+    })
+
+    this._waterLayerDirty = false
   }
 
   // ── Water animation ───────────────────────────────────────────────────────
@@ -883,12 +974,6 @@ export class Renderer {
       this.nightOverlay.rect(0, 0, w, h).fill({ color: 0x05102a, alpha: 0.62 })
     }
     this.nightOverlay.alpha = this._nightMode ? 1 : 0
-  }
-
-  private _applyNightTintToBuildings(on: boolean): void {
-    const tint = on ? 0xffcc77 : 0xffffff
-    for (const s of this.buildingSprites) { if (s) s.tint = tint }
-    for (const s of this.pylonSprites) { if (s) s.tint = tint }
   }
 
   // ── Minimap ──────────────────────────────────────────────────────────────
