@@ -28,6 +28,28 @@ import {
 import { loadSpriteAtlas, type AtlasLevel, type LoadedAtlas, type SpriteMeta } from './spriteAtlas'
 import { drawTerrainTexture } from './sprites'
 
+// ── Coverage overlays ────────────────────────────────────────────────────────
+// A family of data-layer views (like SimCity's query overlays) that tint every
+// tile by a service-coverage flag: covered tiles glow in the service color, and
+// zoned tiles the service does NOT reach are flagged red — the actionable gap
+// telling you where to drop the next station. 'none' hides the overlay.
+
+export type CoverageMode = 'none' | 'water' | 'police' | 'fire' | 'health' | 'education'
+
+interface CoverageDef {
+  flag:    (t: Tile) => boolean
+  sources: Set<Building>
+  color:   number   // covered-tile tint
+}
+
+const COVERAGE_DEFS: Record<Exclude<CoverageMode, 'none'>, CoverageDef> = {
+  water:     { flag: (t) => t.watered,       sources: new Set([Building.WaterTower, Building.WaterPump, Building.PumpingStation]), color: 0x35a7e0 },
+  police:    { flag: (t) => t.policed,       sources: new Set([Building.PoliceStation]), color: 0x3a6cff },
+  fire:      { flag: (t) => t.fireProtected, sources: new Set([Building.FireStation]),   color: 0xff8c2a },
+  health:    { flag: (t) => t.healthCovered, sources: new Set([Building.Hospital]),      color: 0x35e07a },
+  education: { flag: (t) => t.educated,      sources: new Set([Building.School, Building.Library]), color: 0xffd23a },
+}
+
 // Deterministic per-tile hash for picking a building variant from the atlas.
 function variantHash(col: number, row: number): number {
   let h = Math.imul(col + 1, 668265263) ^ Math.imul(row + 1, 2246822519)
@@ -109,8 +131,8 @@ export class Renderer {
   private terrainTexCache = new Map<Terrain, Texture>()
 
   // Fixed-zIndex overlay layers inside worldContainer
-  private zoneLayerGfx!: Graphics   // zone outlines (+ fills when overlay enabled)
-  private waterLayerGfx!: Graphics  // water-coverage view (blue = served, red = dry zone)
+  private zoneLayerGfx!: Graphics    // zone outlines (+ fills when overlay enabled)
+  private coverageGfx!: Graphics     // coverage view (service color = served, red = uncovered zone)
   private hoverGfx!: Graphics       // hover highlight
   private _hoverW = 1               // footprint width  of the hovered placement
   private _hoverH = 1               // footprint height of the hovered placement
@@ -124,10 +146,10 @@ export class Renderer {
   // State flags
   private _nightMode        = false
   private _showZoneOverlay  = false
-  private _showWaterOverlay = false
+  private _coverageMode: CoverageMode = 'none'
   private _hoverIdx         = -1
   private _zoneLayerDirty   = true    // rebuild on first draw
-  private _waterLayerDirty  = true    // water-coverage view geometry
+  private _coverageDirty    = true    // coverage view geometry
   private _waterListDirty   = true    // rebuild on first draw
 
   // Minimap
@@ -223,10 +245,10 @@ export class Renderer {
     this.zoneLayerGfx.zIndex = 60000
     this.worldContainer.addChild(this.zoneLayerGfx)
 
-    this.waterLayerGfx = new Graphics()
-    this.waterLayerGfx.zIndex = 61000   // above zone layer; below hover
-    this.waterLayerGfx.visible = false
-    this.worldContainer.addChild(this.waterLayerGfx)
+    this.coverageGfx = new Graphics()
+    this.coverageGfx.zIndex = 61000   // above zone layer; below hover
+    this.coverageGfx.visible = false
+    this.worldContainer.addChild(this.coverageGfx)
 
     this.hoverGfx = new Graphics()
     this.hoverGfx.zIndex = 80000
@@ -317,14 +339,14 @@ export class Renderer {
       world.dirty.clear()
       this.worldContainer.sortChildren()
 
-      // Tile changes may affect zone layer, water coverage view, and water list
-      this._zoneLayerDirty  = true
-      this._waterLayerDirty = true
-      this._waterListDirty  = true
+      // Tile changes may affect zone layer, coverage view, and water list
+      this._zoneLayerDirty = true
+      this._coverageDirty  = true
+      this._waterListDirty = true
     }
 
     if (this._zoneLayerDirty) this._rebuildZoneLayer()
-    if (this._showWaterOverlay && this._waterLayerDirty) this._rebuildWaterLayer()
+    if (this._coverageMode !== 'none' && this._coverageDirty) this._rebuildCoverageLayer()
     if (this._waterListDirty) this._rebuildWaterList()
 
     // Animate water tiles (shimmer via tint oscillation, every frame)
@@ -418,20 +440,25 @@ export class Renderer {
     this._refreshBuildingTints()
   }
 
-  /** Toggle the water-coverage view: blue where a source reaches, red over zoned
-   *  tiles that are dry (i.e. where a new water utility is needed). */
-  setWaterOverlay(on: boolean): void {
-    if (on === this._showWaterOverlay) return
-    this._showWaterOverlay = on
-    this._waterLayerDirty  = true
-    this.waterLayerGfx.visible = on
-    if (!on) this.waterLayerGfx.clear()
+  /** Select the coverage view (water / police / fire / health / education, or
+   *  'none' to hide it): tiles a service reaches glow in its color, zoned tiles
+   *  it misses turn red (where a new station is needed). */
+  setCoverageOverlay(mode: CoverageMode): void {
+    if (mode === this._coverageMode) return
+    this._coverageMode = mode
+    this._coverageDirty = true
+    this.coverageGfx.visible = mode !== 'none'
+    if (mode === 'none') this.coverageGfx.clear()
   }
 
-  /** Coverage flags (tile.watered) change during sim steps without going through
-   *  world.set, so the UI pokes this each tick to refresh the live view. */
-  markWaterLayerDirty(): void {
-    this._waterLayerDirty = true
+  getCoverageOverlay(): CoverageMode {
+    return this._coverageMode
+  }
+
+  /** Coverage flags (watered/policed/…) change during sim steps without going
+   *  through world.set, so the UI pokes this each tick to refresh the live view. */
+  markCoverageDirty(): void {
+    this._coverageDirty = true
   }
 
   /** Tint for a building/lot sprite: zone color when the zone overlay is on (so a
@@ -866,19 +893,19 @@ export class Renderer {
     this._zoneLayerDirty = false
   }
 
-  // ── Water-coverage view ─────────────────────────────────────────────────────
-  // A single Graphics tinting each tile by its water status, so the player can see
-  // exactly how far the current sources reach and which zones still need water.
-  //   blue   = served (within a source's range)
-  //   red    = a zoned tile that is dry → drop a new water utility near here
+  // ── Coverage view ───────────────────────────────────────────────────────────
+  // A single Graphics tinting each tile by a service-coverage flag, so the player
+  // can see exactly how far the current stations reach and which zones still need
+  // service. Selected via setCoverageOverlay (water / police / fire / health /
+  // education).
+  //   service color = served (within a source's range)
+  //   red           = a zoned tile that is NOT served → drop a new station here
   // Source buildings (always served) get a brighter ring so their hubs stand out.
 
-  private static WATER_SOURCES = new Set<Building>([
-    Building.WaterTower, Building.WaterPump, Building.PumpingStation,
-  ])
-
-  private _rebuildWaterLayer(): void {
-    const g  = this.waterLayerGfx
+  private _rebuildCoverageLayer(): void {
+    if (this._coverageMode === 'none') return
+    const def = COVERAGE_DEFS[this._coverageMode]
+    const g  = this.coverageGfx
     const hw = BASE_HW, hh = BASE_HH
     g.clear()
 
@@ -893,20 +920,20 @@ export class Renderer {
         x - hw * s, y + hh,
       ]
 
-      if (tile.watered) {
-        g.poly(pts).fill({ color: 0x35a7e0, alpha: 0.30 })
+      if (def.flag(tile)) {
+        g.poly(pts).fill({ color: def.color, alpha: 0.30 })
       } else if (tile.zone !== Zone.None) {
-        // A zoned tile with no water — the actionable gap.
+        // A zoned tile the service doesn't reach — the actionable gap.
         g.poly(pts).fill({ color: 0xff4040, alpha: 0.38 })
         g.poly(pts).stroke({ color: 0xff6060, width: 1, alpha: 0.6 })
       }
 
-      if (Renderer.WATER_SOURCES.has(tile.building)) {
-        g.poly(pts).stroke({ color: 0xbfeaff, width: 2.4, alpha: 0.95 })
+      if (def.sources.has(tile.building)) {
+        g.poly(pts).stroke({ color: 0xffffff, width: 2.4, alpha: 0.9 })
       }
     })
 
-    this._waterLayerDirty = false
+    this._coverageDirty = false
   }
 
   // ── Water animation ───────────────────────────────────────────────────────

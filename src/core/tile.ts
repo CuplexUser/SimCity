@@ -49,6 +49,8 @@ export interface Tile {
   watered:       boolean
   policed:       boolean  // within range of a Police Station
   fireProtected: boolean  // within range of a Fire Station
+  healthCovered: boolean  // within range of a Hospital
+  educated:      boolean  // within range of a School or Library
   burning:       boolean  // active fire/disaster state
 
   // ── Multi-tile footprint ──────────────────────────────────────────────────
@@ -74,6 +76,8 @@ export function defaultTile(): Tile {
     watered:       false,
     policed:       false,
     fireProtected: false,
+    healthCovered: false,
+    educated:      false,
     burning:       false,
     footW:         1,
     footH:         1,

@@ -22,21 +22,21 @@
 - [x] Save/load to a file (Export/Import in Options panel) — portable gzip-compressed `.wcity` files (~20 KB vs ~1.2 MB raw JSON); still imports legacy plain-JSON exports
 - [x] **Renderer migrated to PixiJS v8 (WebGL)** — target upgraded to SimCity 4 quality
 
-## Phase 2 — Services ✓ complete
-- [x] Police stations (coverage radius → crime reduction, `simulation/crime.ts`)
-- [x] Fire stations (coverage radius + fire spread, `simulation/fire.ts`)
-- [x] Hospitals, schools, libraries (coverage radius, affects zone happiness)
-- [x] Crime simulation (`simulation/crime.ts`)
-- [x] Fire simulation (`simulation/fire.ts`)
-- [x] Land value simulation (`simulation/landValue.ts`)
-- [x] Pollution simulation (`simulation/pollution.ts`)
-- [x] Traffic simulation (`simulation/traffic.ts`)
+## Phase 2 — Services
+Coverage subsystems now feed back into how a city grows: a plot needs more than
+power + water to densify — it needs services, land value and clean air.
+- [x] Police stations (coverage flood-fill, `simulation/crime.ts` → `tile.policed`)
+- [x] Fire stations (coverage flood-fill + fire spread, `simulation/fire.ts` → `tile.fireProtected`)
+- [x] Hospitals, schools, libraries (coverage flood-fill, `simulation/services.ts` → `tile.healthCovered` / `tile.educated`)
+- [x] **Zone desirability** (`simulation/desirability.ts`) — combines service coverage + land value − pollution into a 0..1 score that caps the density a plot can sustain. Unserviced / low-value / polluted plots stay low-rise; losing a service or rising pollution makes developed lots shed density (abandonment). This is what stops every zone racing to max density on power + water alone.
+- [x] Land value simulation (`simulation/landValue.ts`) — now consumed by desirability (wired in `simManager` at year tick)
+- [x] Pollution simulation (`simulation/pollution.ts`) — now consumed by desirability (wired in `simManager` at year tick)
+- [x] **Coverage data-layer overlays** (View menu / `[C]` cycles) — water · police · fire · health · education. Served tiles glow in the service color; zoned tiles a service misses turn red (the actionable gap). Generalized from the old water-only overlay in `rendering/renderer.ts` (`setCoverageOverlay`).
 - [x] Disaster events (`simulation/disasters.ts`)
-- [x] Data layer panel (`ui/DataLayerPanel.tsx`)
-- [x] Budget panel (`ui/BudgetPanel.tsx`)
-- [x] Advisor panel (`ui/AdvisorPanel.tsx`)
-- [x] Graph panel (`ui/GraphPanel.tsx`)
-- [x] Zone info popup (`ui/ZoneInfoPopup.tsx`)
+- [ ] Traffic simulation (`simulation/traffic.ts`) — `computeTraffic` exists but is not yet consumed by growth or shown as an overlay
+- [ ] Crime *level* (only the binary `policed` flag feeds desirability today; no graded crime rate / crime overlay yet)
+- [ ] Fire *spread* hookup — `stepFireSpread` exists but `simManager` doesn't run it; no ignition source / fire disaster wired in
+- [ ] Wire the unused panels into the app — `BudgetPanel`, `AdvisorPanel`, `GraphPanel`, `ZoneInfoPopup` are written but never mounted in `main.tsx` (only `CityLog` is). (`DataLayerPanel` removed — superseded by the coverage overlays above.)
 
 ## Phase 2.5 — Power plants ✓ complete
 - [x] Coal Power Plant (50-tile range)

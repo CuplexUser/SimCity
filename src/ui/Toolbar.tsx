@@ -1,5 +1,17 @@
 import { useRef, useState } from 'preact/hooks'
 import { Zone, Building, type ActiveTool, type BulldozeMode } from '../core/tile'
+import { type CoverageMode } from '../rendering/renderer'
+
+// Coverage overlays shown in the View submenu (mutually exclusive; clicking the
+// active one turns it off). Each tints served tiles in its color and flags
+// uncovered zones red.
+const COVERAGE_OPTS: { mode: Exclude<CoverageMode, 'none'>; label: string; hint: string }[] = [
+  { mode: 'water',     label: 'Water Coverage',     hint: 'Water reach — blue = served, red = dry zones needing a water utility' },
+  { mode: 'police',    label: 'Police Coverage',    hint: 'Police reach — red zones have no coverage (high crime, low desirability)' },
+  { mode: 'fire',      label: 'Fire Coverage',      hint: 'Fire-station reach — red zones are unprotected' },
+  { mode: 'health',    label: 'Health Coverage',    hint: 'Hospital reach — red zones lack health coverage' },
+  { mode: 'education', label: 'Education Coverage',  hint: 'School / library reach — red zones lack education' },
+]
 
 export type ToolKey =
   | 'R' | 'C' | 'I'
@@ -125,8 +137,8 @@ interface Props {
   onNightMode:     (on: boolean) => void
   showZoneOverlay: boolean
   onZoneOverlay:   (on: boolean) => void
-  showWaterOverlay: boolean
-  onWaterOverlay:   (on: boolean) => void
+  coverage:        CoverageMode
+  onCoverage:      (mode: CoverageMode) => void
 }
 
 export function Toolbar({
@@ -134,7 +146,7 @@ export function Toolbar({
   onNewGame, onSaveState, onLoadState, onExportFile, onImportFile, onOptionsOpen,
   cityName, onCityNameChange, savedCities, status,
   nightMode, onNightMode, showZoneOverlay, onZoneOverlay,
-  showWaterOverlay, onWaterOverlay,
+  coverage, onCoverage,
 }: Props) {
   const [openCat, setOpenCat] = useState<CategoryId | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -250,7 +262,10 @@ export function Toolbar({
     if (openCat === 'view') return [
       toggleBtn('Night Mode',     nightMode,        onNightMode,     'Toggle night mode [N]'),
       toggleBtn('Zone Overlay',   showZoneOverlay,  onZoneOverlay,   'Show zone color overlay [V]'),
-      toggleBtn('Water Coverage', showWaterOverlay, onWaterOverlay,  'Show water coverage: blue = served, red = dry zones needing a water utility [C]'),
+      // Coverage overlays are mutually exclusive — selecting one clears the rest;
+      // clicking the active one turns the overlay off. [C] cycles through them.
+      ...COVERAGE_OPTS.map(({ mode, label, hint }) =>
+        toggleBtn(label, coverage === mode, (on) => onCoverage(on ? mode : 'none'), `${hint} [C]`)),
     ]
     return null
   }

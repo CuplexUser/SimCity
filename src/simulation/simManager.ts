@@ -2,9 +2,12 @@ import { type World } from '../core/world'
 import { events, type TickEvent, type YearEvent, type LogEvent } from '../core/events'
 import { stepPower, type PowerStats } from './power'
 import { stepWater, type WaterStats } from './water'
-import { stepZones, type LotSizer } from './zones'
+import { stepZones, type LotSizer, type GrowthFields } from './zones'
 import { stepCrime } from './crime'
 import { stepFire } from './fire'
+import { stepServices } from './services'
+import { computeLandValue } from './landValue'
+import { computePollution } from './pollution'
 import { computeBudget } from './economy'
 
 const TICKS_PER_YEAR = 12  // 1 tick = 1 game month
@@ -31,12 +34,23 @@ export class SimManager {
     this.tick++
     const isYearTick = this.tick % TICKS_PER_YEAR === 0
 
-    // Run all simulation subsystems
+    // Run all simulation subsystems. Coverage (power/water/crime/fire/services)
+    // refreshes every tick so the data-layer overlays and zone growth read current
+    // flags; the heavier land-value / pollution grids only feed yearly growth.
     this.power = stepPower(this.world)
     this.water = stepWater(this.world)
     stepCrime(this.world)
     stepFire(this.world)
-    const { population } = stepZones(this.world, isYearTick, this.lotSizer)
+    stepServices(this.world)
+
+    let fields: GrowthFields | undefined
+    if (isYearTick) {
+      fields = {
+        landValue: computeLandValue(this.world),
+        pollution: computePollution(this.world),
+      }
+    }
+    const { population } = stepZones(this.world, isYearTick, this.lotSizer, fields)
     this.population = population
 
     events.emit<TickEvent>('tick', { tick: this.tick })

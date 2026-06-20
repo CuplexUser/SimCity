@@ -14,6 +14,10 @@ import { SpeedControl } from './ui/SpeedControl'
 import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST, buildingFootprint, allowsRoadUnder } from './data/buildings'
 import { canPlaceFootprint, placeFootprint } from './core/footprint'
 import { Minimap } from './rendering/minimap'
+import { type CoverageMode } from './rendering/renderer'
+
+// Order the [C] hotkey cycles through (then wraps back to 'none').
+const COVERAGE_CYCLE: CoverageMode[] = ['none', 'water', 'police', 'fire', 'health', 'education']
 
 declare global {
   interface Window {
@@ -42,11 +46,11 @@ function App() {
   const [savedCities, setSavedCities] = useState<string[]>([])
   const [nightMode, setNightMode] = useState(false)
   const [showZoneOverlay, setShowZoneOverlay] = useState(false)
-  const [showWaterOverlay, setShowWaterOverlay] = useState(false)
+  const [coverage, setCoverage] = useState<CoverageMode>('none')
 
   const nightModeRef      = useRef(false)
   const zoneOverlayRef    = useRef(false)
-  const waterOverlayRef   = useRef(false)
+  const coverageRef       = useRef<CoverageMode>('none')
 
   useEffect(() => {
     toolRef.current = activeKey ? keyToTool(activeKey) : null
@@ -70,10 +74,10 @@ function App() {
     engineRef.current?.renderer?.setZoneOverlay(on)
   }
 
-  function handleWaterOverlay(on: boolean) {
-    waterOverlayRef.current = on
-    setShowWaterOverlay(on)
-    engineRef.current?.renderer?.setWaterOverlay(on)
+  function handleCoverage(mode: CoverageMode) {
+    coverageRef.current = mode
+    setCoverage(mode)
+    engineRef.current?.renderer?.setCoverageOverlay(mode)
   }
 
   function resetUiState(yearValue = 2000, populationValue = 0, fundsValue = 20_000) {
@@ -202,9 +206,12 @@ function App() {
 
     window.render_game_to_text = () => {
       const buildings: Record<string, number> = {}
-      let policed = 0
+      let policed = 0, fireProtected = 0, healthCovered = 0, educated = 0
       eng.world.forEach((tile) => {
-        if (tile.policed) policed++
+        if (tile.policed)       policed++
+        if (tile.fireProtected) fireProtected++
+        if (tile.healthCovered) healthCovered++
+        if (tile.educated)      educated++
         if (tile.building !== Building.None) {
           const label = BUILDING_DEFS[tile.building].label
           buildings[label] = (buildings[label] ?? 0) + 1
@@ -218,7 +225,8 @@ function App() {
         funds: fundsRef.current,
         activeTool: toolRef.current,
         camera: { zoom: eng.camera.zoom, panX: eng.camera.panX, panY: eng.camera.panY },
-        services: { policedTiles: policed },
+        services: { policedTiles: policed, fireProtectedTiles: fireProtected, healthCoveredTiles: healthCovered, educatedTiles: educated },
+        coverageOverlay: coverageRef.current,
         buildings,
       })
     }
@@ -523,7 +531,11 @@ function App() {
         case '-': case '_':  eng.camera.snapZoom( 1, canvas.width / 2, canvas.height / 2); break
         case 'n': case 'N':  handleNightMode(!nightModeRef.current);                    break
         case 'v': case 'V':  handleZoneOverlay(!zoneOverlayRef.current);                break
-        case 'c': case 'C':  handleWaterOverlay(!waterOverlayRef.current);              break
+        case 'c': case 'C': {
+          const next = COVERAGE_CYCLE[(COVERAGE_CYCLE.indexOf(coverageRef.current) + 1) % COVERAGE_CYCLE.length]
+          handleCoverage(next)
+          break
+        }
       }
     }
 
@@ -538,8 +550,8 @@ function App() {
       setPower({ ...eng.sim.power })
       setWater({ ...eng.sim.water })
       // Coverage flags change inside the sim step (not via world.set), so refresh
-      // the live water-coverage view each tick while it's showing.
-      if (waterOverlayRef.current) eng.renderer?.markWaterLayerDirty()
+      // the live coverage view each tick while one is showing.
+      if (coverageRef.current !== 'none') eng.renderer?.markCoverageDirty()
     })
 
     const offYear = events.on<YearEvent>('year', ({ year, revenue, expenses }) => {
@@ -596,8 +608,8 @@ function App() {
         onNightMode={handleNightMode}
         showZoneOverlay={showZoneOverlay}
         onZoneOverlay={handleZoneOverlay}
-        showWaterOverlay={showWaterOverlay}
-        onWaterOverlay={handleWaterOverlay}
+        coverage={coverage}
+        onCoverage={handleCoverage}
       />
       <BottomBar year={year} population={pop} funds={funds} power={power} water={water} />
       <SpeedControl speed={speed} onSpeedChange={handleSpeedChange} />

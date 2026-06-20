@@ -3,9 +3,21 @@ import { Zone, Overlay, Terrain } from '../core/tile'
 import { events, type LogEvent } from '../core/events'
 import { isRoadConnected } from '../utils/astar'
 import { placeFootprint } from '../core/footprint'
+import { zoneDesirability, desirabilityDensityCap } from './desirability'
 
 interface ZoneResult {
   population: number
+}
+
+/**
+ * Per-tile inputs to zone growth, computed once per year tick by simManager:
+ * land value and pollution grids (both 0..100). Optional — when absent a tile is
+ * treated as average land value / no pollution, so growth still works but is
+ * driven purely by the service-coverage flags.
+ */
+export interface GrowthFields {
+  landValue?: Uint8Array
+  pollution?: Uint8Array
 }
 
 /**
@@ -38,15 +50,13 @@ function devStage(zone: Zone, pop: number): number {
   return pop >= high ? 2 : pop >= mid ? 1 : 0
 }
 
-export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer): ZoneResult {
-  let rCount = 0
+export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer, fields?: GrowthFields): ZoneResult {
   let cCount = 0
   let iCount = 0
 
   // Count current state. Covered (non-origin) footprint tiles carry zone None,
   // so each developed lot is counted exactly once at its origin.
   world.forEach((tile) => {
-    if (tile.zone === Zone.Residential) rCount++
     if (tile.zone === Zone.Commercial)  cCount++
     if (tile.zone === Zone.Industrial)  iCount++
   })
@@ -58,20 +68,45 @@ export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer
 
   if (isYearTick) {
     const prevPop = population(world)
+    const { landValue, pollution } = fields ?? {}
 
     world.forEach((tile, col, row) => {
       if (tile.zone === Zone.None) return
       // Only origin tiles develop; covered tiles are part of an existing lot.
       if (tile.rootCol !== -1 || tile.rootRow !== -1) return
 
+      const idx = row * world.cols + col
+      const lv = landValue ? landValue[idx] : 50
+      const poll = pollution ? pollution[idx] : 0
+
       const demand =
         (tile.zone === Zone.Residential && rDemand) ||
         (tile.zone === Zone.Commercial  && cDemand) ||
         (tile.zone === Zone.Industrial  && iDemand)
 
+      // Utilities + road access are hard prerequisites. Lose any of them and a
+      // developed lot decays toward abandonment regardless of how nice it is.
+      const serviced = tile.powered && tile.watered && hasRoadAccess(world, col, row)
+      if (!serviced) {
+        if (tile.density > 0) world.set(col, row, { density: tile.density - 1 })
+        return
+      }
+
+      // Desirability (services + land value − pollution) sets the density this
+      // plot can sustain; the city-population stage caps it from above so small
+      // towns stay low-rise even when fully serviced.
       const stage = devStage(tile.zone, prevPop)
-      // Growth needs both utilities (power + water) plus connected road access.
-      if (!(demand && tile.density < STAGE_DENSITY_CAP[stage] && tile.powered && tile.watered && hasRoadAccess(world, col, row))) return
+      const desire = zoneDesirability(tile, lv, poll)
+      const cap = Math.min(STAGE_DENSITY_CAP[stage], desirabilityDensityCap(desire))
+
+      // Above the sustainable cap (e.g. a service was bulldozed, pollution rose):
+      // the lot sheds density. This is what makes services matter both ways.
+      if (tile.density > cap) {
+        world.set(col, row, { density: tile.density - 1 })
+        return
+      }
+      // At or above the cap with no demand pressure: hold steady.
+      if (!(demand && tile.density < cap)) return
 
       // First development on a vacant plot may claim a multi-tile lot from
       // contiguous same-zone vacant neighbors (only when art sizes are known).

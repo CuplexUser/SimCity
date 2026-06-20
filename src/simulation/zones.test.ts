@@ -1,9 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { stepZones } from './zones'
+import { stepZones, type GrowthFields } from './zones'
 import { World } from '../core/world'
-import { Zone, Overlay } from '../core/tile'
+import { Zone, Overlay, type Tile } from '../core/tile'
 import { placeFootprint } from '../core/footprint'
 import { events } from '../core/events'
+
+// Full service coverage — lets desirability reach its ceiling so a test can
+// exercise the city-population staging in isolation from the service gating.
+const FULLY_SERVED: Partial<Tile> = {
+  powered: true, watered: true,
+  policed: true, fireProtected: true, healthCovered: true, educated: true,
+}
+
+// Land-value grid pinned high, so desirability isn't held down by low value.
+function highLandValue(world: World): GrowthFields {
+  return { landValue: new Uint8Array(world.cols * world.rows).fill(100) }
+}
 
 describe('stepZones', () => {
   beforeEach(() => {
@@ -66,55 +78,106 @@ describe('stepZones', () => {
     expect(world.get(5, 5).density).toBe(2)
   })
 
-  it('density does not grow when the nearest road is three tiles away', () => {
+  it('a vacant zone does not develop when the nearest road is three tiles away', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 0, powered: true, watered: true })
     world.set(5, 8, { overlay: Overlay.Road })
     world.set(5, 9, { overlay: Overlay.Road })
     stepZones(world, true)
-    expect(world.get(5, 5).density).toBe(1)
+    expect(world.get(5, 5).density).toBe(0)
   })
 
-  it('density does not grow without power', () => {
+  it('a vacant zone does not develop without power', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: false })
+    world.set(5, 5, { zone: Zone.Residential, density: 0, powered: false })
     world.set(5, 6, { overlay: Overlay.Road })
     stepZones(world, true)
-    expect(world.get(5, 5).density).toBe(1)
+    expect(world.get(5, 5).density).toBe(0)
   })
 
-  it('density does not grow without water', () => {
+  it('a vacant zone does not develop without water', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: false })
+    world.set(5, 5, { zone: Zone.Residential, density: 0, powered: true, watered: false })
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
     stepZones(world, true)
-    expect(world.get(5, 5).density).toBe(1)
+    expect(world.get(5, 5).density).toBe(0)
   })
 
-  it('density does not grow without road access', () => {
+  it('a vacant zone does not develop without road access', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
-    // No road nearby — stays at density 1
+    world.set(5, 5, { zone: Zone.Residential, density: 0, powered: true, watered: true })
+    // No road nearby — stays vacant
     stepZones(world, true)
-    expect(world.get(5, 5).density).toBe(1)
+    expect(world.get(5, 5).density).toBe(0)
   })
 
-  it('density does not grow with an isolated single-tile road (stub)', () => {
+  it('a vacant zone does not develop with an isolated single-tile road (stub)', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 1, powered: true, watered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 0, powered: true, watered: true })
     // Single isolated road tile fails isRoadConnected check
     world.set(5, 6, { overlay: Overlay.Road })
     stepZones(world, true)
-    expect(world.get(5, 5).density).toBe(1)
+    expect(world.get(5, 5).density).toBe(0)
   })
 
-  it('density caps at 8', () => {
+  it('a developed lot decays toward abandonment when it loses power', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 8, powered: true, watered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 4, powered: false, watered: true })
     world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
     stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(3)
+  })
+
+  it('a developed lot sheds density when it exceeds what its desirability sustains', () => {
+    const world = new World()
+    // Powered + watered + road but no services and low land value → low desirability,
+    // so an over-built density-6 lot declines one stage toward its sustainable cap.
+    world.set(5, 5, { zone: Zone.Residential, density: 6, powered: true, watered: true })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    stepZones(world, true)
+    expect(world.get(5, 5).density).toBe(5)
+  })
+
+  it('density caps at 8 even when fully serviced on prime land', () => {
+    const world = new World()
+    world.set(5, 5, { zone: Zone.Residential, density: 8, ...FULLY_SERVED })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    // 50 filler lots push the city into high stage so staging doesn't cap below 8.
+    for (let i = 0; i < 80; i++) {
+      world.set(i % 20, 40 + Math.floor(i / 20), { zone: Zone.Residential, density: 8, ...FULLY_SERVED })
+    }
+    stepZones(world, true, undefined, highLandValue(world))
     expect(world.get(5, 5).density).toBe(8)
+  })
+
+  it('an unserviced low-value lot cannot climb past low density (services gate growth)', () => {
+    const world = new World()
+    // Big city (high stage cap) but this lot has no services and average land value.
+    for (let i = 0; i < 80; i++) {
+      world.set(i % 20, 40 + Math.floor(i / 20), { zone: Zone.Residential, density: 8, ...FULLY_SERVED })
+    }
+    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true, watered: true })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    stepZones(world, true)  // no land-value grid → defaults to average (50)
+    // Desirability cap (≈2) holds it at low-rise despite the high stage cap.
+    expect(world.get(5, 5).density).toBe(2)
+  })
+
+  it('full service coverage lets a lot grow past low density', () => {
+    const world = new World()
+    for (let i = 0; i < 80; i++) {
+      world.set(i % 20, 40 + Math.floor(i / 20), { zone: Zone.Residential, density: 8, ...FULLY_SERVED })
+    }
+    world.set(5, 5, { zone: Zone.Residential, density: 2, ...FULLY_SERVED })
+    world.set(5, 6, { overlay: Overlay.Road })
+    world.set(5, 7, { overlay: Overlay.Road })
+    stepZones(world, true, undefined, highLandValue(world))
+    expect(world.get(5, 5).density).toBe(3)
   })
 
   it('a road overlay on the tile itself counts when connected to another road', () => {
@@ -187,12 +250,13 @@ describe('stepZones', () => {
     expect(population).toBe(3 * 10 * 4) // density × 10 × (2×2 tiles)
   })
 
-  it('small-town residential stays low-rise (density caps at 2)', () => {
+  it('small-town residential stays low-rise (stage cap 2)', () => {
     const world = new World()
-    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true, watered: true })
+    // Fully serviced on prime land, so only the population stage caps growth.
+    world.set(5, 5, { zone: Zone.Residential, density: 2, ...FULLY_SERVED })
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
-    stepZones(world, true) // population ≈ 20 → stage 0
+    stepZones(world, true, undefined, highLandValue(world)) // population ≈ 20 → stage 0
     expect(world.get(5, 5).density).toBe(2)
   })
 
@@ -200,12 +264,12 @@ describe('stepZones', () => {
     const world = new World()
     // 50 filler lots × density 2 × 10 = 1,000 population → residential mid stage
     for (let i = 0; i < 50; i++) {
-      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true, watered: true })
+      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, ...FULLY_SERVED })
     }
-    world.set(5, 5, { zone: Zone.Residential, density: 2, powered: true, watered: true })
+    world.set(5, 5, { zone: Zone.Residential, density: 2, ...FULLY_SERVED })
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
-    stepZones(world, true)
+    stepZones(world, true, undefined, highLandValue(world))
     expect(world.get(5, 5).density).toBe(3)
   })
 
@@ -214,12 +278,12 @@ describe('stepZones', () => {
     // 60 filler lots → 1,200 population: above residential mid (1,000) but
     // below commercial mid (2,000); commercial demand itself is satisfied.
     for (let i = 0; i < 60; i++) {
-      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, powered: true, watered: true })
+      world.set(i % 20, 20 + Math.floor(i / 20), { zone: Zone.Residential, density: 2, ...FULLY_SERVED })
     }
-    world.set(5, 5, { zone: Zone.Commercial, density: 2, powered: true, watered: true })
+    world.set(5, 5, { zone: Zone.Commercial, density: 2, ...FULLY_SERVED })
     world.set(5, 6, { overlay: Overlay.Road })
     world.set(5, 7, { overlay: Overlay.Road })
-    stepZones(world, true)
+    stepZones(world, true, undefined, highLandValue(world))
     expect(world.get(5, 5).density).toBe(2)
   })
 
