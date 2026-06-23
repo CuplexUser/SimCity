@@ -17,6 +17,9 @@ import {
   type Bond, type CreditRating,
   totalDebt, annualDebtService, rateForRating,
 } from './simulation/finance'
+import {
+  type OrdinanceId, type OrdinanceState, newOrdinanceState,
+} from './simulation/ordinances'
 import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST, buildingFootprint, allowsRoadUnder } from './data/buildings'
 import { canPlaceFootprint, placeFootprint } from './core/footprint'
 import { Minimap } from './rendering/minimap'
@@ -67,6 +70,8 @@ function App() {
   const [popHistory, setPopHistory] = useState<number[]>([])
   const [fundsHistory, setFundsHistory] = useState<number[]>([])
   const [burning, setBurning] = useState(0)
+  const [cityRating, setCityRating] = useState(55)
+  const [ordinances, setOrdinances] = useState<OrdinanceState>(newOrdinanceState())
   const [queried, setQueried] = useState<{ tile: Tile; col: number; row: number } | null>(null)
   const [finance, setFinance] = useState<{
     rating: CreditRating; debt: number; debtService: number; nextRate: number; bonds: Bond[]
@@ -119,7 +124,19 @@ function App() {
     setBudget(eng.sim.currentBudget())
     setPopHistory([...eng.sim.popHistory])
     setFundsHistory([...eng.sim.fundsHistory])
+    setCityRating(eng.sim.cityRating)
+    setOrdinances({ ...eng.sim.ordinances })
     refreshFinance()
+  }
+
+  // Toggling an ordinance changes the annual budget; the effect lands at year-end,
+  // but the live budget figures reflect it immediately (currentBudget includes it).
+  function handleOrdinance(id: OrdinanceId, on: boolean) {
+    const eng = engineRef.current
+    if (!eng) return
+    eng.sim.setOrdinance(id, on)
+    setOrdinances({ ...eng.sim.ordinances })
+    setBudget(eng.sim.currentBudget())
   }
 
   function refreshFinance() {
@@ -179,6 +196,10 @@ function App() {
     setBudget({ revenue: 0, expenses: 0 })
     setPopHistory([])
     setFundsHistory([])
+    // The sim has already been reset/loaded by the caller, so read rating +
+    // ordinances back from it (defaults for a new game, saved values on load).
+    setCityRating(engineRef.current?.sim.cityRating ?? 55)
+    setOrdinances({ ...(engineRef.current?.sim.ordinances ?? newOrdinanceState()) })
     refreshFinance()
     closeQuery()
     setActiveKey(null)
@@ -248,6 +269,7 @@ function App() {
         population: eng.sim.population,
         funds: fundsRef.current,
         finance: eng.sim.finance,
+        ordinances: eng.sim.ordinances,
       })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -319,6 +341,8 @@ function App() {
         tick: eng.sim.getTick(),
         population: eng.sim.population,
         funds: fundsRef.current,
+        cityRating: eng.sim.cityRating,
+        ordinances: Object.entries(eng.sim.ordinances).filter(([, on]) => on).map(([id]) => id),
         finance: {
           rating: eng.sim.finance.rating,
           debt: totalDebt(eng.sim.finance),
@@ -690,10 +714,11 @@ function App() {
       fundsRef.current += net
       eng.sim.funds = fundsRef.current
       setFunds(fundsRef.current)
-      // Feed the budget figures + history graphs + finance summary.
+      // Feed the budget figures + history graphs + finance summary + rating.
       setBudget({ revenue, expenses })
       setPopHistory([...eng.sim.popHistory])
       setFundsHistory([...eng.sim.fundsHistory])
+      setCityRating(eng.sim.cityRating)
       refreshFinance()
     })
 
@@ -774,6 +799,7 @@ function App() {
           power={power}
           water={water}
           burning={burning}
+          cityRating={cityRating}
           rating={finance.rating}
           debt={finance.debt}
           debtService={finance.debtService}
@@ -781,6 +807,8 @@ function App() {
           bonds={finance.bonds}
           onIssueBond={handleIssueBond}
           onPayoffBond={handlePayoffBond}
+          ordinances={ordinances}
+          onOrdinance={handleOrdinance}
           onClose={toggleDashboard}
         />
       )}

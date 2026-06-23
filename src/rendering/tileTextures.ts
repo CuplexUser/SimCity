@@ -98,6 +98,7 @@ export function bakeAllTextures(scale = 1): TextureCache {
     Building.WaterPump,  Building.PumpingStation,
     Building.PoliceStation, Building.FireStation, Building.Hospital,
     Building.School, Building.Library,
+    Building.Park, Building.Plaza,
   ]
   for (const bldg of allBldgs) {
     const stub = { building: bldg, zone: Zone.None, density: 0 } as Tile

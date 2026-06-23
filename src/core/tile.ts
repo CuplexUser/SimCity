@@ -36,6 +36,9 @@ export enum Building {
   // Water sources — varying cost, range, and footprint (mirror the power plants)
   WaterPump     = 12,  // small ground pump — 12-tile range, cheap
   PumpingStation= 13,  // large pumping station — 45-tile range, big footprint
+  // Parks — no coverage role; boost land value in a radius (simulation/landValue.ts)
+  Park          = 14,  // green space — lawn + trees, larger land-value bonus
+  Plaza         = 15,  // paved plaza with a fountain — smaller bonus
 }
 
 export interface Tile {

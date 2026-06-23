@@ -70,10 +70,10 @@ power + water to densify — it needs services, land value and clean air.
 - [x] Deficit → credit rating spiral — `computeRating` (AAA→CCC) from cash position + debt-to-revenue load, re-assessed each year and on every bond action; a worse rating raises the rate on new bonds (`rateForRating`), so over-borrowing against thin revenue compounds
 - [ ] Full road pathfinding for traffic (A* on road graph replacing convolution)
 - [ ] Water pipes / pump stations — separate pipe overlay
-- [ ] Budget ordinances — per-ordinance toggles affecting revenue/expenses
-- [ ] Park / plaza building types — boost land value in radius
-- [ ] Population history graph (canvas-rendered)
-- [ ] City rating score
+- [x] Budget ordinances — `simulation/ordinances.ts`; six toggleable laws (gambling/tourism income, smoke-detector/clean-air/transit/watch expenses) whose amount scales with population. Applied at the annual budget (`SimManager.currentBudget`), surfaced in the City Data dashboard's Ordinances panel, and saved with the city
+- [x] Park / plaza building types — `Building.Park` (2×2 lawn + trees) and `Building.Plaza` (1×1 paved fountain) in a new **Parks** toolbar category; boost nearby land value in `simulation/landValue.ts` (park stronger, plaza smaller); procedurally drawn in `tileRenderer.ts` with atlas fallback
+- [x] Population history graph (canvas-rendered) — `ui/HistoryGraph.tsx` draws a filled line chart on a `<canvas>` (replaces the old flex-bar GraphPanel); used for both Population and Funds in the dashboard
+- [x] City rating score — `simulation/cityRating.ts`; a 0..100 mayor-approval score from utility coverage + developed land quality (value vs crime/pollution) + treasury health − active fires, recomputed yearly (reusing the land-value/pollution/crime grids) and shown with a descriptor in the dashboard
 
 ## Phase 6 — Polish
 - [ ] Earthquake (random tile destruction)

@@ -21,6 +21,8 @@ export const BUILDING_DEFS: Record<Building, BuildingDef> = {
   [Building.WindTurbine]:   { cost: 1_200,   upkeep: 25,  label: 'Wind Turbine' },
   [Building.WaterPump]:     { cost: 300,     upkeep: 30,  label: 'Water Pump' },
   [Building.PumpingStation]:{ cost: 4_000,   upkeep: 250, label: 'Pumping Station' },
+  [Building.Park]:          { cost: 250,     upkeep: 20,  label: 'Park' },
+  [Building.Plaza]:         { cost: 150,     upkeep: 10,  label: 'Plaza' },
 }
 
 // Plot footprint (width × height in tiles) for plopped buildings. Larger civic
@@ -36,6 +38,8 @@ export const BUILDING_FOOTPRINT: Record<Building, [number, number]> = {
   [Building.WaterTower]:    [2, 2],
   [Building.WaterPump]:     [1, 1],
   [Building.PumpingStation]:[3, 3],
+  [Building.Park]:          [2, 2],
+  [Building.Plaza]:         [1, 1],
   [Building.PoliceStation]: [2, 2],
   [Building.FireStation]:   [2, 2],
   [Building.Hospital]:      [2, 2],

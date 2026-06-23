@@ -1134,6 +1134,72 @@ export function drawBuilding(
       }
       break
     }
+
+    case Building.Park: {
+      // Ground-level green space: a lawn diamond filling the tile, a light path
+      // crossing it, and a cluster of small trees. (Drawn one tile wide; the
+      // renderer scales it up to fill a multi-tile plot.)
+      const top = { x: cx, y: cy }
+      const rgt = { x: cx + hw, y: cy + hh }
+      const bot = { x: cx, y: cy + hh * 2 }
+      const lft = { x: cx - hw, y: cy + hh }
+      // Lawn
+      ctx.fillStyle = '#3f7d33'
+      ctx.beginPath()
+      ctx.moveTo(top.x, top.y); ctx.lineTo(rgt.x, rgt.y)
+      ctx.lineTo(bot.x, bot.y); ctx.lineTo(lft.x, lft.y); ctx.closePath(); ctx.fill()
+      // Lighter mowed highlight on the sunlit (east) half
+      ctx.fillStyle = 'rgba(120,190,70,0.18)'
+      ctx.beginPath()
+      ctx.moveTo(top.x, top.y); ctx.lineTo(rgt.x, rgt.y)
+      ctx.lineTo(bot.x, bot.y); ctx.closePath(); ctx.fill()
+      // Crossing gravel path
+      ctx.strokeStyle = '#c2b229'  // tan gravel
+      ctx.lineWidth = Math.max(1.5, hw * 0.10)
+      ctx.setLineDash([])
+      ctx.beginPath()
+      ctx.moveTo(cx - hw * 0.5, cy + hh * 0.5); ctx.lineTo(cx + hw * 0.5, cy + hh * 1.5)
+      ctx.moveTo(cx + hw * 0.5, cy + hh * 0.5); ctx.lineTo(cx - hw * 0.5, cy + hh * 1.5)
+      ctx.stroke()
+      // Trees
+      const tSize = Math.max(5, hw * 0.40)
+      drawSmallTree(ctx, cx,              cy + hh * 0.95, tSize)
+      drawSmallTree(ctx, cx - hw * 0.42,  cy + hh * 1.25, tSize * 0.85)
+      drawSmallTree(ctx, cx + hw * 0.42,  cy + hh * 1.25, tSize * 0.85)
+      drawSmallTree(ctx, cx,              cy + hh * 1.55, tSize * 0.9)
+      break
+    }
+
+    case Building.Plaza: {
+      // Paved civic plaza: stone diamond, a banded border and a central fountain.
+      const top = { x: cx, y: cy }
+      const rgt = { x: cx + hw, y: cy + hh }
+      const bot = { x: cx, y: cy + hh * 2 }
+      const lft = { x: cx - hw, y: cy + hh }
+      ctx.fillStyle = '#b9b3a6'
+      ctx.beginPath()
+      ctx.moveTo(top.x, top.y); ctx.lineTo(rgt.x, rgt.y)
+      ctx.lineTo(bot.x, bot.y); ctx.lineTo(lft.x, lft.y); ctx.closePath(); ctx.fill()
+      // Inset paving band
+      const s = 0.6
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'
+      ctx.lineWidth = Math.max(0.8, hw * 0.03)
+      ctx.beginPath()
+      ctx.moveTo(cx, cy + hh * (1 - s)); ctx.lineTo(cx + hw * s, cy + hh)
+      ctx.lineTo(cx, cy + hh * (1 + s)); ctx.lineTo(cx - hw * s, cy + hh); ctx.closePath(); ctx.stroke()
+      // Fountain basin
+      ctx.fillStyle = '#8f8a7e'
+      ctx.beginPath(); ctx.ellipse(cx, cy + hh, hw * 0.30, hh * 0.30, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#4a90c4'
+      ctx.beginPath(); ctx.ellipse(cx, cy + hh, hw * 0.20, hh * 0.20, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = 'rgba(180,220,255,0.55)'
+      ctx.beginPath(); ctx.ellipse(cx - hw * 0.05, cy + hh * 0.93, hw * 0.07, hh * 0.07, 0, 0, Math.PI * 2); ctx.fill()
+      // A pair of corner trees for greenery
+      const tSize = Math.max(4, hw * 0.30)
+      drawSmallTree(ctx, cx - hw * 0.55, cy + hh * 1.05, tSize)
+      drawSmallTree(ctx, cx + hw * 0.55, cy + hh * 1.05, tSize)
+      break
+    }
   }
 }
 

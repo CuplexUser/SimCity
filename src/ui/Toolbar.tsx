@@ -21,6 +21,7 @@ export type ToolKey =
   | 'R' | 'C' | 'I'
   | 'PP' | 'GT' | 'NP' | 'SF' | 'WN'
   | 'WT' | 'WP' | 'PM' | 'PS' | 'FS' | 'HP' | 'SC' | 'LB'
+  | 'PK' | 'PZ'
   | 'road' | 'power'
   | 'dozeNormal' | 'dozeTerrain' | 'dozeZoning'
 
@@ -41,6 +42,8 @@ export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'HP')   return { kind: 'building', building: Building.Hospital }
   if (key === 'SC')   return { kind: 'building', building: Building.School }
   if (key === 'LB')   return { kind: 'building', building: Building.Library }
+  if (key === 'PK')   return { kind: 'building', building: Building.Park }
+  if (key === 'PZ')   return { kind: 'building', building: Building.Plaza }
   if (key === 'road') return { kind: 'road' }
   if (key === 'power')return { kind: 'power' }
   return { kind: 'bulldoze', mode: bulldozeModeForKey(key) }
@@ -58,7 +61,7 @@ export function bulldozeKeyForMode(mode: BulldozeMode): ToolKey {
   return 'dozeNormal'
 }
 
-type CategoryId = 'zones' | 'power' | 'services' | 'roads' | 'doze' | 'view' | 'options'
+type CategoryId = 'zones' | 'power' | 'services' | 'parks' | 'roads' | 'doze' | 'view' | 'options'
 
 interface ToolBtn { key: ToolKey; label: string; bg: string; fg?: string; title: string }
 
@@ -66,6 +69,7 @@ const CATEGORIES: { id: CategoryId; icon: string; label: string }[] = [
   { id: 'zones',    icon: '🏘',  label: 'Zones' },
   { id: 'power',    icon: '⚡',  label: 'Power' },
   { id: 'services', icon: '🏛',  label: 'Services' },
+  { id: 'parks',    icon: '🌳',  label: 'Parks' },
   { id: 'roads',    icon: '🛣',  label: 'Roads' },
   { id: 'doze',     icon: '🔨',  label: 'Bulldoze' },
   { id: 'view',     icon: '👁',   label: 'View' },
@@ -97,6 +101,11 @@ const SERVICE_BTNS: ToolBtn[] = [
   { key: 'LB', label: 'Library ($500)',         bg: '#120a00', title: 'Library' },
 ]
 
+const PARK_BTNS: ToolBtn[] = [
+  { key: 'PK', label: 'Park ($250)',  bg: '#0e220e', fg: '#9ddd7d', title: 'Park — green space, raises nearby land value' },
+  { key: 'PZ', label: 'Plaza ($150)', bg: '#1c1c14', fg: '#d8cba0', title: 'Plaza — paved square with a fountain, small land-value boost' },
+]
+
 const ROAD_BTNS: ToolBtn[] = [
   { key: 'road',  label: 'Road ($10/tile)',       bg: '#1a1a1a', title: 'Road [R]' },
   { key: 'power', label: 'Power line ($5/tile)',  bg: '#1a1a00', title: 'Power line [L]' },
@@ -112,6 +121,7 @@ const TOOL_ICONS: Partial<Record<ToolKey, string>> = {
   R: '🏘', C: '🏢', I: '🏭',
   PP: '🏭', GT: '💨', NP: '⚛', SF: '☀', WN: '🌬',
   WT: '💧', WP: '🚰', PM: '🏗', PS: '🚔', FS: '🚒', HP: '🏥', SC: '🏫', LB: '📚',
+  PK: '🌳', PZ: '⛲',
   road: '━', power: '⚡',
   dozeNormal: '🔨', dozeTerrain: '⛏', dozeZoning: '✂',
 }
@@ -120,6 +130,7 @@ function categoryForKey(key: ToolKey): CategoryId {
   if (['R', 'C', 'I'].includes(key)) return 'zones'
   if (['PP', 'GT', 'NP', 'SF', 'WN'].includes(key)) return 'power'
   if (['WT', 'WP', 'PM', 'PS', 'FS', 'HP', 'SC', 'LB'].includes(key)) return 'services'
+  if (['PK', 'PZ'].includes(key)) return 'parks'
   if (['road', 'power'].includes(key)) return 'roads'
   return 'doze'
 }
@@ -261,6 +272,7 @@ export function Toolbar({
     if (openCat === 'zones')    return ZONE_BTNS.map(toolBtn)
     if (openCat === 'power')    return POWER_BTNS.map(toolBtn)
     if (openCat === 'services') return SERVICE_BTNS.map(toolBtn)
+    if (openCat === 'parks')    return PARK_BTNS.map(toolBtn)
     if (openCat === 'roads')    return ROAD_BTNS.map(toolBtn)
     if (openCat === 'doze')     return DOZE_BTNS.map(toolBtn)
     if (openCat === 'view') return [

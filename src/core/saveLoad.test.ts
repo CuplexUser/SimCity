@@ -58,6 +58,17 @@ describe('saveLoad', () => {
     expect(restored.sim.finance).toEqual(finance)
   })
 
+  it('round-trips active ordinances in the sim state', () => {
+    const world = new World()
+    const ordinances = {
+      gambling: true, tourism: false, smokeDetectors: true,
+      cleanAir: false, publicTransit: false, neighborhoodWatch: true,
+    }
+    const save = serializeGameState(world, { year: 2020, tick: 5, population: 800, funds: 5_000, ordinances })
+    const restored = deserializeGameState(save)
+    expect(restored.sim.ordinances).toEqual(ordinances)
+  })
+
   it('normalizes city names for save slots', () => {
     expect(normalizeCityName('  New   Stockholm  ')).toBe('New Stockholm')
     expect(normalizeCityName('   ')).toBe('Untitled City')

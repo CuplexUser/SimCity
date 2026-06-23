@@ -11,6 +11,10 @@ import { computeLandValue } from './landValue'
 import { computePollution } from './pollution'
 import { computeTraffic } from './traffic'
 import { computeBudget } from './economy'
+import { computeCityRating } from './cityRating'
+import {
+  type OrdinanceState, type OrdinanceId, newOrdinanceState, ordinanceBudget,
+} from './ordinances'
 import {
   type FinanceState, type Bond, newFinanceState,
   issueBond as financeIssueBond, payoffBond as financePayoffBond, payoffAmount,
@@ -34,10 +38,15 @@ export class SimManager {
   water: WaterStats = { watered: 0, unwatered: 0 }
   /** Tiles currently on fire (latest tick) — UI reads this for the 🔥 indicator. */
   burning = 0
+  /** Overall city approval, 0..100 (see simulation/cityRating.ts). Updated yearly. */
+  cityRating = 55
 
   /** Per-year samples for the population / funds history graphs (capped length). */
   readonly popHistory:   number[] = []
   readonly fundsHistory: number[] = []
+
+  /** Active budget ordinances (see simulation/ordinances.ts). */
+  ordinances: OrdinanceState = newOrdinanceState()
 
   /** Municipal bonds + credit rating (see simulation/finance.ts). */
   finance: FinanceState = newFinanceState()
@@ -99,12 +108,24 @@ export class SimManager {
 
     if (isYearTick) {
       this.year++
-      const { revenue, expenses } = computeBudget(this.world)
+      const base = computeBudget(this.world)
+      const ord  = ordinanceBudget(this.ordinances, this.population)
+      const revenue  = base.revenue + ord.revenue
+      const expenses = base.expenses + ord.expenses
       // Bond payments come due before we tally the year, then the rating is
       // re-assessed against the resulting cash position and debt load.
       const debtService = payAnnualDebt(this.finance)
       this.funds += revenue - expenses - debtService
       this.finance.rating = computeRating(this.funds, totalDebt(this.finance), revenue)
+
+      // Mayor approval reuses the land-value / pollution / crime grids built above.
+      if (fields) {
+        this.cityRating = computeCityRating(this.world, {
+          funds: this.funds, burning: this.burning,
+          power: this.power, water: this.water,
+          landValue: fields.landValue, pollution: fields.pollution, crime: fields.crime,
+        })
+      }
 
       this._recordHistory()
 
@@ -137,9 +158,18 @@ export class SimManager {
   getYear(): number { return this.year }
   getTick(): number { return this.tick }
 
-  /** Current annual revenue / expenses (recomputed on demand for the budget UI). */
+  /** Current annual revenue / expenses (recomputed on demand for the budget UI),
+   *  including the effect of any active ordinances at the current population. */
   currentBudget(): { revenue: number; expenses: number } {
-    return computeBudget(this.world)
+    const base = computeBudget(this.world)
+    const ord  = ordinanceBudget(this.ordinances, this.population)
+    return { revenue: base.revenue + ord.revenue, expenses: base.expenses + ord.expenses }
+  }
+
+  /** Toggle a budget ordinance. Its effect lands at the next annual budget; the
+   *  live budget figures (currentBudget) reflect it immediately. */
+  setOrdinance(id: OrdinanceId, on: boolean): void {
+    this.ordinances[id] = on
   }
 
   /**
@@ -175,7 +205,10 @@ export class SimManager {
     if (this.fundsHistory.length > CAP) this.fundsHistory.shift()
   }
 
-  reset(state?: { year?: number; tick?: number; population?: number; funds?: number; finance?: FinanceState }): void {
+  reset(state?: {
+    year?: number; tick?: number; population?: number; funds?: number
+    finance?: FinanceState; ordinances?: OrdinanceState
+  }): void {
     this.year = state?.year ?? 2000
     this.tick = state?.tick ?? 0
     this.population = state?.population ?? 0
@@ -183,8 +216,12 @@ export class SimManager {
     this.power = { powered: 0, unpowered: 0 }
     this.water = { watered: 0, unwatered: 0 }
     this.burning = 0
+    this.cityRating = 55
     this.popHistory.length = 0
     this.fundsHistory.length = 0
+    this.ordinances = state?.ordinances
+      ? { ...newOrdinanceState(), ...state.ordinances }
+      : newOrdinanceState()
     // Deep-copy so a loaded save's bonds aren't aliased into the save object.
     this.finance = state?.finance
       ? { rating: state.finance.rating, nextId: state.finance.nextId, bonds: state.finance.bonds.map((b) => ({ ...b })) }

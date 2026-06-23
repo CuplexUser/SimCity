@@ -47,6 +47,13 @@ function findServiceSources(
       if (building === Building.Hospital) {
         out.push({ bonus: Math.max(1, Math.floor((range - dist) / 2)) })
       }
+      // Parks lift nearby land value the most up close; plazas a smaller amount.
+      if (building === Building.Park) {
+        out.push({ bonus: Math.max(0, Math.round((range - dist) * 1.4)) })
+      }
+      if (building === Building.Plaza) {
+        out.push({ bonus: Math.max(0, range - dist) })
+      }
     }
   }
 
