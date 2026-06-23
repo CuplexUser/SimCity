@@ -1,6 +1,7 @@
 import { get, keys, set } from 'idb-keyval'
 import { World } from './world'
 import { defaultTile, type Tile } from './tile'
+import { type FinanceState } from '../simulation/finance'
 
 export interface SaveGame {
   version: 1 | 2
@@ -14,6 +15,8 @@ export interface SimState {
   tick: number
   population: number
   funds: number
+  /** Bonds + credit rating. Optional — older saves predate it and default to none. */
+  finance?: FinanceState
 }
 
 export interface GameStateSave extends SaveGame {

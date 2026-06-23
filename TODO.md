@@ -32,11 +32,11 @@ power + water to densify — it needs services, land value and clean air.
 - [x] Land value simulation (`simulation/landValue.ts`) — now consumed by desirability (wired in `simManager` at year tick)
 - [x] Pollution simulation (`simulation/pollution.ts`) — now consumed by desirability (wired in `simManager` at year tick)
 - [x] **Coverage data-layer overlays** (View menu / `[C]` cycles) — water · police · fire · health · education. Served tiles glow in the service color; zoned tiles a service misses turn red (the actionable gap). Generalized from the old water-only overlay in `rendering/renderer.ts` (`setCoverageOverlay`).
-- [x] Disaster events (`simulation/disasters.ts`)
-- [ ] Traffic simulation (`simulation/traffic.ts`) — `computeTraffic` exists but is not yet consumed by growth or shown as an overlay
-- [ ] Crime *level* (only the binary `policed` flag feeds desirability today; no graded crime rate / crime overlay yet)
-- [ ] Fire *spread* hookup — `stepFireSpread` exists but `simManager` doesn't run it; no ignition source / fire disaster wired in
-- [ ] Wire the unused panels into the app — `BudgetPanel`, `AdvisorPanel`, `GraphPanel`, `ZoneInfoPopup` are written but never mounted in `main.tsx` (only `CityLog` is). (`DataLayerPanel` removed — superseded by the coverage overlays above.)
+- [x] Disaster events (`simulation/disasters.ts`) — now actually wired into `simManager.step()` (random fire **or** earthquake, low per-tick chance, logged to City Log)
+- [x] Traffic simulation (`simulation/traffic.ts`) — `computeTraffic` feeds `GrowthFields.traffic` → `zoneDesirability` (per-zone congestion weight) and drives the `traffic` heatmap overlay
+- [x] Crime *level* — graded 0..100 crime grid (`computeCrime`), folded into desirability (crime weight) and shown as the `crime` heatmap overlay
+- [x] Fire *spread* hookup — `simManager` runs `stepFireSpread` + `resolveFires` each tick (fire stations douse covered tiles, unprotected lots burn out and clear); fire-disaster ignition wired via `triggerFire`; burning tiles render as flickering flame markers + a 🔥 indicator
+- [x] Wire the unused panels into the app — `BudgetPanel`, `AdvisorPanel`, `GraphPanel` mounted in a toggleable **City Data** dashboard (`ui/Dashboard.tsx`, 📊 button / `[D]`); `ZoneInfoPopup` shows on tile click when no tool is active. (`DataLayerPanel` removed — superseded by the coverage overlays above.)
 
 ## Phase 2.5 — Power plants ✓ complete
 - [x] Coal Power Plant (50-tile range)
@@ -66,8 +66,8 @@ power + water to densify — it needs services, land value and clean air.
 - [x] Drag-to-zone rectangular selection — zone tools drag out a previewed rectangle, applied on mouseup (respects rules + funds)
 
 ## Phase 5 — Economy depth
-- [ ] Bond system (issue / pay off, 10-year fixed, 5–12% interest)
-- [ ] Deficit → credit rating spiral
+- [x] Bond system (issue / pay off, 10-year fixed, 5–12% interest) — `simulation/finance.ts`; issue/pay-off in the City Data dashboard's Finance panel. Bonds amortize level-principal; the rate is locked at issue from the current credit rating
+- [x] Deficit → credit rating spiral — `computeRating` (AAA→CCC) from cash position + debt-to-revenue load, re-assessed each year and on every bond action; a worse rating raises the rate on new bonds (`rateForRating`), so over-borrowing against thin revenue compounds
 - [ ] Full road pathfinding for traffic (A* on road graph replacing convolution)
 - [ ] Water pipes / pump stations — separate pipe overlay
 - [ ] Budget ordinances — per-ordinance toggles affecting revenue/expenses

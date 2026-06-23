@@ -19,6 +19,6 @@ export const events = new EventBus()
 
 // Typed event payloads
 export interface TickEvent  { tick: number }
-export interface YearEvent  { year: number; revenue: number; expenses: number }
+export interface YearEvent  { year: number; revenue: number; expenses: number; debtService: number }
 export interface TileEvent  { col: number;  row: number }
 export interface LogEvent   { message: string }

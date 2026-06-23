@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'preact/hooks'
 import { Engine } from './core/engine'
 import { World } from './core/world'
 import { generateWorld } from './data/worldGen'
-import { Zone, Overlay, Building, Terrain, type ActiveTool } from './core/tile'
+import { Zone, Overlay, Building, Terrain, type ActiveTool, type Tile } from './core/tile'
 import { events, type TickEvent, type YearEvent } from './core/events'
 import { applyBulldoze } from './core/bulldoze'
 import { gameStateFromBlob, gameStateToBlob, listSavedCities, loadGameState, normalizeCityName, SAVE_FILE_EXT, saveGameState } from './core/saveLoad'
@@ -11,6 +11,12 @@ import { Toolbar, bulldozeKeyForMode, keyToTool, type ToolKey } from './ui/Toolb
 import { BottomBar } from './ui/BottomBar'
 import { CityLog } from './ui/CityLog'
 import { SpeedControl } from './ui/SpeedControl'
+import { Dashboard } from './ui/Dashboard'
+import { ZoneInfoPopup } from './ui/ZoneInfoPopup'
+import {
+  type Bond, type CreditRating,
+  totalDebt, annualDebtService, rateForRating,
+} from './simulation/finance'
 import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST, buildingFootprint, allowsRoadUnder } from './data/buildings'
 import { canPlaceFootprint, placeFootprint } from './core/footprint'
 import { Minimap } from './rendering/minimap'
@@ -55,6 +61,20 @@ function App() {
   const [showZoneOverlay, setShowZoneOverlay] = useState(false)
   const [overlay, setOverlay] = useState<OverlayMode>('none')
 
+  // ── Dashboard + tile-query panels ──────────────────────────────────────────
+  const [showDashboard, setShowDashboard] = useState(false)
+  const [budget, setBudget] = useState({ revenue: 0, expenses: 0 })
+  const [popHistory, setPopHistory] = useState<number[]>([])
+  const [fundsHistory, setFundsHistory] = useState<number[]>([])
+  const [burning, setBurning] = useState(0)
+  const [queried, setQueried] = useState<{ tile: Tile; col: number; row: number } | null>(null)
+  const [finance, setFinance] = useState<{
+    rating: CreditRating; debt: number; debtService: number; nextRate: number; bonds: Bond[]
+  }>({ rating: 'AAA', debt: 0, debtService: 0, nextRate: rateForRating('AAA'), bonds: [] })
+
+  const showDashboardRef = useRef(false)
+  const queriedRef = useRef<{ col: number; row: number } | null>(null)
+
   const nightModeRef      = useRef(false)
   const zoneOverlayRef    = useRef(false)
   const overlayRef        = useRef<OverlayMode>('none')
@@ -93,6 +113,61 @@ function App() {
     )
   }
 
+  function refreshDashboardData() {
+    const eng = engineRef.current
+    if (!eng) return
+    setBudget(eng.sim.currentBudget())
+    setPopHistory([...eng.sim.popHistory])
+    setFundsHistory([...eng.sim.fundsHistory])
+    refreshFinance()
+  }
+
+  function refreshFinance() {
+    const eng = engineRef.current
+    if (!eng) return
+    const f = eng.sim.finance
+    setFinance({
+      rating:      f.rating,
+      debt:        totalDebt(f),
+      debtService: annualDebtService(f),
+      nextRate:    rateForRating(f.rating),
+      bonds:       f.bonds.map((b) => ({ ...b })),
+    })
+  }
+
+  // Bond actions go through the sim (which mutates funds), then we re-sync the
+  // UI's funds source of truth (fundsRef) from the sim.
+  function handleIssueBond(amount: number) {
+    const eng = engineRef.current
+    if (!eng) return
+    const bond = eng.sim.issueBond(amount)
+    if (!bond) return
+    fundsRef.current = eng.sim.funds
+    setFunds(fundsRef.current)
+    refreshFinance()
+  }
+
+  function handlePayoffBond(id: number) {
+    const eng = engineRef.current
+    if (!eng) return
+    if (!eng.sim.payoffBond(id)) return
+    fundsRef.current = eng.sim.funds
+    setFunds(fundsRef.current)
+    refreshFinance()
+  }
+
+  function toggleDashboard() {
+    const next = !showDashboardRef.current
+    showDashboardRef.current = next
+    setShowDashboard(next)
+    if (next) refreshDashboardData()
+  }
+
+  function closeQuery() {
+    queriedRef.current = null
+    setQueried(null)
+  }
+
   function resetUiState(yearValue = 2000, populationValue = 0, fundsValue = 20_000) {
     fundsRef.current = fundsValue
     setYear(yearValue)
@@ -100,6 +175,12 @@ function App() {
     setFunds(fundsValue)
     setPower({ powered: 0, unpowered: 0 })
     setWater({ watered: 0, unwatered: 0 })
+    setBurning(0)
+    setBudget({ revenue: 0, expenses: 0 })
+    setPopHistory([])
+    setFundsHistory([])
+    refreshFinance()
+    closeQuery()
     setActiveKey(null)
   }
 
@@ -127,6 +208,7 @@ function App() {
         tick: eng.sim.getTick(),
         population: eng.sim.population,
         funds: fundsRef.current,
+        finance: eng.sim.finance,
       }, name)
       setCityName(name)
       await refreshSavedCities()
@@ -165,6 +247,7 @@ function App() {
         tick: eng.sim.getTick(),
         population: eng.sim.population,
         funds: fundsRef.current,
+        finance: eng.sim.finance,
       })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -236,6 +319,12 @@ function App() {
         tick: eng.sim.getTick(),
         population: eng.sim.population,
         funds: fundsRef.current,
+        finance: {
+          rating: eng.sim.finance.rating,
+          debt: totalDebt(eng.sim.finance),
+          annualDebtService: annualDebtService(eng.sim.finance),
+          bondCount: eng.sim.finance.bonds.length,
+        },
         activeTool: toolRef.current,
         camera: { zoom: eng.camera.zoom, panX: eng.camera.panX, panY: eng.camera.panY },
         services: { policedTiles: policed, fireProtectedTiles: fireProtected, healthCoveredTiles: healthCovered, educatedTiles: educated },
@@ -339,6 +428,17 @@ function App() {
           eng.renderer?.minimap.markDirty()
           break
       }
+    }
+
+    // With no tool selected, a left-click queries the tile under the cursor and
+    // shows the ZoneInfoPopup. The snapshot is refreshed each tick (see offTick)
+    // so coverage flags stay live while the popup is open.
+    function queryTile(clientX: number, clientY: number) {
+      const rect = canvas.getBoundingClientRect()
+      const hit  = findHitTile(clientX - rect.left, clientY - rect.top)
+      if (!hit) { closeQuery(); return }
+      queriedRef.current = hit
+      setQueried({ tile: { ...eng.world.get(hit.col, hit.row) }, col: hit.col, row: hit.row })
     }
 
     // ── Mouse ────────────────────────────────────────────────────────────────
@@ -454,6 +554,9 @@ function App() {
           }
           painting = true
           placeTile(e.clientX, e.clientY)
+        } else {
+          // No tool active → query the tile under the cursor.
+          queryTile(e.clientX, e.clientY)
         }
       }
       if (e.button === 1 || e.button === 2) { panning = true; lastX = e.clientX; lastY = e.clientY }
@@ -539,7 +642,8 @@ function App() {
         case 'w': case 'W': setActiveKey(k => k === 'WT'        ? null : 'WT');        break
         case 'l': case 'L': setActiveKey(k => k === 'power'     ? null : 'power');     break
         case 'b': case 'B': setActiveKey(k => k === 'dozeNormal'? null : 'dozeNormal'); break
-        case 'Escape':       setActiveKey(null);                                         break
+        case 'Escape':       setActiveKey(null); closeQuery();                            break
+        case 'd': case 'D':  toggleDashboard();                                           break
         case '+': case '=':  eng.camera.snapZoom(-1, canvas.width / 2, canvas.height / 2); break
         case '-': case '_':  eng.camera.snapZoom( 1, canvas.width / 2, canvas.height / 2); break
         case 'n': case 'N':  handleNightMode(!nightModeRef.current);                    break
@@ -562,6 +666,13 @@ function App() {
       setPop(eng.sim.population)
       setPower({ ...eng.sim.power })
       setWater({ ...eng.sim.water })
+      setBurning(eng.sim.burning)
+      // Keep the tile-query popup and (if open) the budget figures live.
+      if (queriedRef.current) {
+        const { col, row } = queriedRef.current
+        setQueried({ tile: { ...eng.world.get(col, row) }, col, row })
+      }
+      if (showDashboardRef.current) { setBudget(eng.sim.currentBudget()); refreshFinance() }
       // Coverage flags / heatmap values change inside the sim step (not via
       // world.set), so refresh the live overlay each tick while one is showing.
       const mode = overlayRef.current
@@ -571,13 +682,19 @@ function App() {
       }
     })
 
-    const offYear = events.on<YearEvent>('year', ({ year, revenue, expenses }) => {
+    const offYear = events.on<YearEvent>('year', ({ year, revenue, expenses, debtService }) => {
       setYear(year)
       setPop(eng.sim.population)
-      const net = revenue - expenses
+      // Bond payments are part of the year's net change to the treasury.
+      const net = revenue - expenses - debtService
       fundsRef.current += net
       eng.sim.funds = fundsRef.current
       setFunds(fundsRef.current)
+      // Feed the budget figures + history graphs + finance summary.
+      setBudget({ revenue, expenses })
+      setPopHistory([...eng.sim.popHistory])
+      setFundsHistory([...eng.sim.fundsHistory])
+      refreshFinance()
     })
 
     // ── Async: init PixiJS renderer, then start ──────────────────────────────
@@ -628,9 +745,53 @@ function App() {
         overlay={overlay}
         onOverlay={handleOverlay}
       />
-      <BottomBar year={year} population={pop} funds={funds} power={power} water={water} />
+      <BottomBar year={year} population={pop} funds={funds} power={power} water={water} burning={burning} />
       <SpeedControl speed={speed} onSpeedChange={handleSpeedChange} />
       <CityLog />
+
+      {/* Top-right: City Data dashboard toggle [D] */}
+      <button
+        title="City Data [D]"
+        onClick={toggleDashboard}
+        style={{
+          position: 'absolute', top: 8, right: 8,
+          width: 36, height: 36,
+          border: `2px solid ${showDashboard ? '#aaa' : 'transparent'}`,
+          background: showDashboard ? '#333' : 'rgba(0,0,0,0.82)',
+          color: '#eee', cursor: 'pointer', borderRadius: 8,
+          fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >📊</button>
+
+      {showDashboard && (
+        <Dashboard
+          revenue={budget.revenue}
+          expenses={budget.expenses}
+          popHistory={popHistory}
+          fundsHistory={fundsHistory}
+          population={pop}
+          funds={funds}
+          power={power}
+          water={water}
+          burning={burning}
+          rating={finance.rating}
+          debt={finance.debt}
+          debtService={finance.debtService}
+          nextRate={finance.nextRate}
+          bonds={finance.bonds}
+          onIssueBond={handleIssueBond}
+          onPayoffBond={handlePayoffBond}
+          onClose={toggleDashboard}
+        />
+      )}
+
+      {queried && (
+        <ZoneInfoPopup
+          tile={queried.tile} col={queried.col} row={queried.row}
+          onClose={closeQuery}
+          offsetRight={showDashboard ? 236 : 8}
+        />
+      )}
     </div>
   )
 }

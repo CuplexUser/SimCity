@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { stepFire, stepFireSpread } from './fire'
+import { stepFire, stepFireSpread, resolveFires, igniteFire, countBurning } from './fire'
 import { World } from '../core/world'
-import { Building, Terrain } from '../core/tile'
+import { Building, Terrain, Zone } from '../core/tile'
 
 describe('stepFire', () => {
   it('covers tiles near a fire station', () => {
@@ -38,5 +38,62 @@ describe('stepFireSpread', () => {
     expect(spread).toBe(2)
     expect(world.get(5, 6).burning).toBe(false)
     expect(world.get(6, 5).burning).toBe(false)
+  })
+})
+
+describe('igniteFire', () => {
+  it('ignites a developed tile', () => {
+    const world = new World()
+    world.set(4, 4, { zone: Zone.Residential, density: 1 })
+    expect(igniteFire(world, 4, 4)).toBe(true)
+    expect(world.get(4, 4).burning).toBe(true)
+  })
+
+  it('refuses to ignite empty land', () => {
+    const world = new World()
+    expect(igniteFire(world, 4, 4)).toBe(false)
+    expect(world.get(4, 4).burning).toBe(false)
+  })
+})
+
+describe('resolveFires', () => {
+  it('extinguishes a fire-protected tile (high roll succeeds)', () => {
+    const world = new World()
+    world.set(5, 5, { burning: true, fireProtected: true })
+    const { extinguished, destroyed } = resolveFires(world, () => 0)
+    expect(extinguished).toBe(1)
+    expect(destroyed).toBe(0)
+    expect(world.get(5, 5).burning).toBe(false)
+  })
+
+  it('burns out an unprotected developed tile, clearing it', () => {
+    const world = new World()
+    world.set(5, 5, { burning: true, zone: Zone.Commercial, density: 4, building: Building.Library })
+    const { destroyed } = resolveFires(world, () => 0)
+    expect(destroyed).toBe(1)
+    const t = world.get(5, 5)
+    expect(t.burning).toBe(false)
+    expect(t.zone).toBe(Zone.None)
+    expect(t.building).toBe(Building.None)
+    expect(t.density).toBe(0)
+  })
+
+  it('leaves a burning tile alight when neither roll fires', () => {
+    const world = new World()
+    world.set(5, 5, { burning: true })
+    const { extinguished, destroyed } = resolveFires(world, () => 0.99)
+    expect(extinguished).toBe(0)
+    expect(destroyed).toBe(0)
+    expect(world.get(5, 5).burning).toBe(true)
+  })
+})
+
+describe('countBurning', () => {
+  it('counts tiles on fire', () => {
+    const world = new World()
+    expect(countBurning(world)).toBe(0)
+    world.set(1, 1, { burning: true })
+    world.set(2, 2, { burning: true })
+    expect(countBurning(world)).toBe(2)
   })
 })

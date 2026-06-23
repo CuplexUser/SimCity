@@ -6,9 +6,11 @@ interface Props {
   power:      { powered: number; unpowered: number }
   /** Zone water coverage from the sim (watered / unwatered zoned tiles). */
   water:      { watered: number; unwatered: number }
+  /** Tiles currently on fire (0 hides the indicator). */
+  burning?:   number
 }
 
-export function BottomBar({ year, population, funds, power, water }: Props) {
+export function BottomBar({ year, population, funds, power, water, burning = 0 }: Props) {
   const fundsColor = funds >= 0 ? '#5aee5a' : '#ee5555'
 
   const zoneTiles  = power.powered + power.unpowered
@@ -59,6 +61,11 @@ export function BottomBar({ year, population, funds, power, water }: Props) {
       <span title={waterTitle}>
         💧 <strong style={{ color: waterTiles === 0 ? '#888' : waterColor }}>{waterText}</strong>
       </span>
+      {burning > 0 && (
+        <span title="Tiles on fire — fire stations contain and extinguish blazes">
+          🔥 <strong style={{ color: '#ff7a3a' }}>{burning} burning</strong>
+        </span>
+      )}
     </div>
   )
 }

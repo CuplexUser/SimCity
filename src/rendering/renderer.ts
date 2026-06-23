@@ -159,6 +159,7 @@ export class Renderer {
   // Fixed-zIndex overlay layers inside worldContainer
   private zoneLayerGfx!: Graphics    // zone outlines (+ fills when overlay enabled)
   private overlayGfx!: Graphics      // data-layer view (coverage or gradient heatmap)
+  private fireGfx!: Graphics         // flame markers on burning tiles (flickers per frame)
   private hoverGfx!: Graphics       // hover highlight
   private _hoverW = 1               // footprint width  of the hovered placement
   private _hoverH = 1               // footprint height of the hovered placement
@@ -178,6 +179,8 @@ export class Renderer {
   private _zoneLayerDirty   = true    // rebuild on first draw
   private _overlayDirty     = true    // data-layer view geometry
   private _waterListDirty   = true    // rebuild on first draw
+  private _fireDirty        = true    // burning-tile geometry
+  private _fireTiles: Array<{ col: number; row: number; elevation: number }> = []
 
   // Minimap
   private minimapHtmlCanvas!: HTMLCanvasElement
@@ -277,6 +280,10 @@ export class Renderer {
     this.overlayGfx.visible = false
     this.worldContainer.addChild(this.overlayGfx)
 
+    this.fireGfx = new Graphics()
+    this.fireGfx.zIndex = 70000    // above overlays, below hover
+    this.worldContainer.addChild(this.fireGfx)
+
     this.hoverGfx = new Graphics()
     this.hoverGfx.zIndex = 80000
     this.worldContainer.addChild(this.hoverGfx)
@@ -366,18 +373,22 @@ export class Renderer {
       world.dirty.clear()
       this.worldContainer.sortChildren()
 
-      // Tile changes may affect zone layer, overlay view, and water list
+      // Tile changes may affect zone layer, overlay view, water list, and fires
       this._zoneLayerDirty = true
       this._overlayDirty   = true
       this._waterListDirty = true
+      this._fireDirty      = true
     }
 
     if (this._zoneLayerDirty) this._rebuildZoneLayer()
     if (this._overlayMode !== 'none' && this._overlayDirty) this._rebuildOverlayLayer()
     if (this._waterListDirty) this._rebuildWaterList()
+    if (this._fireDirty) this._rebuildFireLayer()
 
     // Animate water tiles (shimmer via tint oscillation, every frame)
     this._animateWater(performance.now())
+    // Flicker active fires
+    this._animateFire(performance.now())
 
     this._redrawMinimap()
 
@@ -1022,6 +1033,39 @@ export class Renderer {
     const tint    = (rb << 16) | (gv << 8) | bv
 
     for (const s of this.waterSpriteList) s.tint = tint
+  }
+
+  // ── Fire layer ─────────────────────────────────────────────────────────────
+  // A single Graphics draws a flame marker on every burning tile. Geometry is
+  // rebuilt only when tiles change (burning is set/cleared via world.set), then
+  // the whole layer's alpha flickers per frame so fires look alive.
+
+  private _rebuildFireLayer(): void {
+    this._fireTiles = []
+    this.world.forEach((tile, col, row) => {
+      if (tile.burning) this._fireTiles.push({ col, row, elevation: tile.elevation })
+    })
+
+    const g = this.fireGfx
+    g.clear()
+    const hw = BASE_HW, hh = BASE_HH
+    for (const { col, row, elevation } of this._fireTiles) {
+      const x = (col - row) * hw
+      const y = (col + row) * hh - elevation * BASE_EH
+      // Two stacked flame triangles (outer orange, inner yellow) rooted near the
+      // tile center, pointing up — a simple but readable blaze marker.
+      const cx = x, base = y + hh * 1.15, tip = y - hh * 0.55
+      g.poly([cx - hw * 0.42, base, cx + hw * 0.42, base, cx, tip]).fill({ color: 0xff5a1e })
+      g.poly([cx - hw * 0.22, base, cx + hw * 0.22, base, cx, y - hh * 0.05]).fill({ color: 0xffd23a })
+    }
+    this.fireGfx.visible = this._fireTiles.length > 0
+    this._fireDirty = false
+  }
+
+  private _animateFire(now: number): void {
+    if (this._fireTiles.length === 0) return
+    // Rapid flicker between 0.55 and 1.0 alpha.
+    this.fireGfx.alpha = 0.78 + 0.22 * Math.sin(now * 0.02)
   }
 
   // ── Hover highlight ───────────────────────────────────────────────────────

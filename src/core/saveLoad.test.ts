@@ -46,6 +46,18 @@ describe('saveLoad', () => {
     expect(restored.sim).toEqual({ year: 2010, tick: 42, population: 1200, funds: 99_999 })
   })
 
+  it('round-trips bonds + credit rating in the finance state', () => {
+    const world = new World()
+    const finance = {
+      rating: 'BBB' as const,
+      nextId: 3,
+      bonds: [{ id: 1, principal: 10_000, rate: 0.08, termYears: 10, remaining: 7, balance: 7_000 }],
+    }
+    const save = serializeGameState(world, { year: 2020, tick: 5, population: 800, funds: 5_000, finance })
+    const restored = deserializeGameState(save)
+    expect(restored.sim.finance).toEqual(finance)
+  })
+
   it('normalizes city names for save slots', () => {
     expect(normalizeCityName('  New   Stockholm  ')).toBe('New Stockholm')
     expect(normalizeCityName('   ')).toBe('Untitled City')
