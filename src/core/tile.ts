@@ -17,6 +17,7 @@ export enum Overlay {
   Road      = 1,
   PowerLine = 2,
   Rail      = 4,
+  Pipe      = 8,  // water main — carries water any distance, crosses water terrain
 }
 
 export enum Building {
@@ -94,6 +95,7 @@ export type ActiveTool =
   | { kind: 'building'; building: Building }
   | { kind: 'road' }
   | { kind: 'power' }
+  | { kind: 'pipe' }
   | { kind: 'bulldoze'; mode: BulldozeMode }
   | null
 

@@ -75,4 +75,5 @@ export const ZONE_COST: Record<Zone, number> = {
 export const OVERLAY_COST: Partial<Record<Overlay, number>> = {
   [Overlay.Road]:      10,
   [Overlay.PowerLine]:  5,
+  [Overlay.Pipe]:       4,
 }

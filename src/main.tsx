@@ -474,9 +474,9 @@ function App() {
     let terrainLevelTarget: number | undefined = undefined
     // Drag-to-zone: zone tools fill the rectangle dragged out, applied on mouseup.
     let zoneDrag: { start: { col: number; row: number }; end: { col: number; row: number } } | null = null
-    // Drag-to-build: road/power tools drag out a straight segment locked to the
-    // dominant axis (SimCity-style), previewed live and applied on mouseup.
-    let lineDrag: { start: { col: number; row: number }; end: { col: number; row: number }; kind: 'road' | 'power' } | null = null
+    // Drag-to-build: road/power/pipe tools drag out a straight segment locked to
+    // the dominant axis (SimCity-style), previewed live and applied on mouseup.
+    let lineDrag: { start: { col: number; row: number }; end: { col: number; row: number }; kind: 'road' | 'power' | 'pipe' } | null = null
 
     // Lock a drag endpoint to the start tile's row or column, whichever axis the
     // cursor has moved furthest along, so segments are always straight.
@@ -497,20 +497,22 @@ function App() {
 
     // Place one road/power tile: 'skip' passes over tiles that already have the
     // overlay (no charge), 'blocked' stops the whole segment at an obstacle.
-    function placeOverlayTile(col: number, row: number, kind: 'road' | 'power'): 'placed' | 'skip' | 'blocked' {
-      const overlay = kind === 'road' ? Overlay.Road : Overlay.PowerLine
+    function placeOverlayTile(col: number, row: number, kind: 'road' | 'power' | 'pipe'): 'placed' | 'skip' | 'blocked' {
+      const overlay = kind === 'road' ? Overlay.Road : kind === 'power' ? Overlay.PowerLine : Overlay.Pipe
       const t = eng.world.get(col, row)
       if (t.overlay & overlay)          return 'skip'
       if (t.building !== Building.None) return 'blocked'
-      // A building's allocated plot (covered footprint tiles) is reserved — no roads.
+      // A building's allocated plot (covered footprint tiles) is reserved — no overlays.
       if (t.rootCol !== -1 || t.rootRow !== -1) return 'blocked'
+      // Roads need clear ground; power lines and (underground) water pipes may run
+      // under developed lots and across water terrain.
       if (kind === 'road' && (t.density > 0 || t.terrain === Terrain.Water)) return 'blocked'
       if (!spendFunds(OVERLAY_COST[overlay] ?? 0)) return 'blocked'
       eng.world.set(col, row, { overlay: t.overlay | overlay })
       return 'placed'
     }
 
-    function applyOverlayLine(a: { col: number; row: number }, b: { col: number; row: number }, kind: 'road' | 'power') {
+    function applyOverlayLine(a: { col: number; row: number }, b: { col: number; row: number }, kind: 'road' | 'power' | 'pipe') {
       const dc = Math.sign(b.col - a.col), dr = Math.sign(b.row - a.row)
       const len = Math.abs(b.col - a.col) + Math.abs(b.row - a.row) // one axis is always 0
       for (let i = 0, c = a.col, r = a.row; i <= len; i++, c += dc, r += dr) {
@@ -563,8 +565,8 @@ function App() {
             if (hit) { zoneDrag = { start: hit, end: hit }; showZoneRectPreview() }
             return
           }
-          // Road/power tools drag out a straight segment (applied on mouseup).
-          if (toolRef.current.kind === 'road' || toolRef.current.kind === 'power') {
+          // Road/power/pipe tools drag out a straight segment (applied on mouseup).
+          if (toolRef.current.kind === 'road' || toolRef.current.kind === 'power' || toolRef.current.kind === 'pipe') {
             const rect = canvas.getBoundingClientRect()
             const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
             if (hit) { lineDrag = { start: hit, end: hit, kind: toolRef.current.kind }; showLinePreview() }

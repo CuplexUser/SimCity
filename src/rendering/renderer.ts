@@ -143,6 +143,7 @@ export class Renderer {
   private overlayMask:     Int8Array            // road mask baked into each overlay sprite (-1 = none); debug/test signal
   private pylonSprites:    (Sprite   | null)[]   // Blender transmission-pylon sprite, spaced along power runs (atlas only)
   private wireGfx:         (Graphics | null)[]   // catenary conductors spanning between power-line tiles
+  private pipeGfx:         (Graphics | null)[]   // water-main segments spanning between pipe tiles
   private buildingSprites: (Sprite   | null)[]
   private _powerArmH = 30   // screen px from tile apex up to the conductor attach height (from pylon meta)
 
@@ -202,6 +203,7 @@ export class Renderer {
     this.overlayMask     = new Int8Array(n).fill(-1)
     this.pylonSprites    = new Array(n).fill(null)
     this.wireGfx         = new Array(n).fill(null)
+    this.pipeGfx         = new Array(n).fill(null)
     this.buildingSprites = new Array(n).fill(null)
   }
 
@@ -350,7 +352,7 @@ export class Renderer {
         // where this tile no longer carries the overlay itself.
         for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]] as const) {
           const nc = col + dc, nr = row + dr
-          if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & (Overlay.Road | Overlay.PowerLine))) {
+          if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & (Overlay.Road | Overlay.PowerLine | Overlay.Pipe))) {
             overlayIdxs.add(nr * world.cols + nc)
           }
         }
@@ -585,7 +587,7 @@ export class Renderer {
   private _refreshAllSprites(): void {
     this.world.forEach((_tile, col, row) => {
       const idx = this._idx(col, row)
-      if (this.overlaySprites[idx] || this.pylonSprites[idx] || this.wireGfx[idx]) this._rebuildOverlay(col, row)
+      if (this.overlaySprites[idx] || this.pylonSprites[idx] || this.wireGfx[idx] || this.pipeGfx[idx]) this._rebuildOverlay(col, row)
       if (this.buildingSprites[idx]) this._rebuildBuilding(col, row)
     })
     this.worldContainer.sortChildren()
@@ -666,10 +668,17 @@ export class Renderer {
     if (oldPylon) { this.worldContainer.removeChild(oldPylon); oldPylon.destroy({ texture: false }); this.pylonSprites[idx] = null }
     const oldWire = this.wireGfx[idx]
     if (oldWire) { this.worldContainer.removeChild(oldWire); oldWire.destroy(); this.wireGfx[idx] = null }
+    const oldPipe = this.pipeGfx[idx]
+    if (oldPipe) { this.worldContainer.removeChild(oldPipe); oldPipe.destroy(); this.pipeGfx[idx] = null }
     this.overlayMask[idx] = -1
 
     const tile = this.world.get(col, row)
     if (!tile.overlay) return
+
+    // ── Water pipes: blue mains drawn at ground level between connected tiles ──
+    if (tile.overlay & Overlay.Pipe) {
+      this._drawPipes(idx, col, row, tile, this._pipeMask(col, row))
+    }
 
     // ── Power lines: live conductors + spaced transmission pylons ────────────
     // Wires are drawn to the connected E/S neighbors (each network edge owned by
@@ -708,6 +717,44 @@ export class Renderer {
     const p = (c: number, r: number): number =>
       w.inBounds(c, r) && (w.get(c, r).overlay & Overlay.PowerLine) ? 1 : 0
     return p(col + 1, row) | (p(col - 1, row) << 1) | (p(col, row + 1) << 2) | (p(col, row - 1) << 3)
+  }
+
+  /** 4-bit mask of pipe neighbors: E=1, W=2, S=4, N=8. */
+  private _pipeMask(col: number, row: number): number {
+    const w = this.world
+    const p = (c: number, r: number): number =>
+      w.inBounds(c, r) && (w.get(c, r).overlay & Overlay.Pipe) ? 1 : 0
+    return p(col + 1, row) | (p(col - 1, row) << 1) | (p(col, row + 1) << 2) | (p(col, row - 1) << 3)
+  }
+
+  /**
+   * Draw a tile's water main as blue segments from the diamond center out to each
+   * connected edge midpoint (half-way to the neighbor), so adjacent tiles' halves
+   * meet into a continuous line. An isolated pipe draws a small node dot.
+   */
+  private _drawPipes(idx: number, col: number, row: number, tile: Tile, mask: number): void {
+    const g = new Graphics()
+    g.zIndex = (col + row) * 3 + 1.6   // above the road sprite (layer 1), below buildings (layer 2)
+    const cx = (col - row) * BASE_HW
+    const cy = (col + row) * BASE_HH - tile.elevation * BASE_EH + BASE_HH   // diamond center
+    const ex = BASE_HW / 2, ey = BASE_HH / 2
+    // bit → edge-midpoint offset from center (E=1, W=2, S=4, N=8)
+    const arms: Array<[number, number, number]> = [
+      [1,  ex,  ey], [2, -ex, -ey], [4, -ex,  ey], [8,  ex, -ey],
+    ]
+    let drew = false
+    for (const [bit, ax, ay] of arms) {
+      if (!(mask & bit)) continue
+      g.moveTo(cx, cy).lineTo(cx + ax, cy + ay)
+      drew = true
+    }
+    if (drew) {
+      g.stroke({ color: 0x2f8fd0, width: 3, alpha: 0.7 })
+    } else {
+      g.circle(cx, cy, 2.5).fill({ color: 0x2f8fd0, alpha: 0.7 })
+    }
+    this.pipeGfx[idx] = g
+    this.worldContainer.addChild(g)
   }
 
   /** Whether this power tile gets a pylon: ends/junctions/corners always, plus

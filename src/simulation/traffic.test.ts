@@ -30,4 +30,19 @@ describe('computeTraffic', () => {
     expect(computeTraffic(commercial)[6 * commercial.cols + 5])
       .toBeGreaterThanOrEqual(computeTraffic(residential)[6 * residential.cols + 5])
   })
+
+  it('routes commuter trips along the road between homes and jobs', () => {
+    const world = new World()
+    // A vertical road corridor from a home cluster (top) to a job cluster (bottom).
+    for (let r = 5; r <= 15; r++) world.set(5, r, { overlay: Overlay.Road })
+    world.set(4, 5, { zone: Zone.Residential, density: 8 })   // origin, adjacent to road (5,5)
+    world.set(4, 15, { zone: Zone.Commercial, density: 8 })   // destination, adjacent to road (5,15)
+
+    const traffic = computeTraffic(world)
+    // A mid-corridor road tile carries the through trip even though no zone touches it.
+    expect(traffic[10 * world.cols + 5]).toBeGreaterThan(0)
+    // An unrelated road tile far from the corridor stays empty.
+    world.set(40, 40, { overlay: Overlay.Road })
+    expect(computeTraffic(world)[40 * world.cols + 40]).toBe(0)
+  })
 })

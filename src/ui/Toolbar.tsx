@@ -22,7 +22,7 @@ export type ToolKey =
   | 'PP' | 'GT' | 'NP' | 'SF' | 'WN'
   | 'WT' | 'WP' | 'PM' | 'PS' | 'FS' | 'HP' | 'SC' | 'LB'
   | 'PK' | 'PZ'
-  | 'road' | 'power'
+  | 'road' | 'power' | 'pipe'
   | 'dozeNormal' | 'dozeTerrain' | 'dozeZoning'
 
 export function keyToTool(key: ToolKey): ActiveTool {
@@ -46,6 +46,7 @@ export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'PZ')   return { kind: 'building', building: Building.Plaza }
   if (key === 'road') return { kind: 'road' }
   if (key === 'power')return { kind: 'power' }
+  if (key === 'pipe') return { kind: 'pipe' }
   return { kind: 'bulldoze', mode: bulldozeModeForKey(key) }
 }
 
@@ -109,6 +110,7 @@ const PARK_BTNS: ToolBtn[] = [
 const ROAD_BTNS: ToolBtn[] = [
   { key: 'road',  label: 'Road ($10/tile)',       bg: '#1a1a1a', title: 'Road [R]' },
   { key: 'power', label: 'Power line ($5/tile)',  bg: '#1a1a00', title: 'Power line [L]' },
+  { key: 'pipe',  label: 'Water pipe ($4/tile)',  bg: '#0a1822', fg: '#7dc4dd', title: 'Water pipe — carries water across the map and under lots' },
 ]
 
 const DOZE_BTNS: ToolBtn[] = [
@@ -122,7 +124,7 @@ const TOOL_ICONS: Partial<Record<ToolKey, string>> = {
   PP: '🏭', GT: '💨', NP: '⚛', SF: '☀', WN: '🌬',
   WT: '💧', WP: '🚰', PM: '🏗', PS: '🚔', FS: '🚒', HP: '🏥', SC: '🏫', LB: '📚',
   PK: '🌳', PZ: '⛲',
-  road: '━', power: '⚡',
+  road: '━', power: '⚡', pipe: '〰',
   dozeNormal: '🔨', dozeTerrain: '⛏', dozeZoning: '✂',
 }
 
@@ -131,7 +133,7 @@ function categoryForKey(key: ToolKey): CategoryId {
   if (['PP', 'GT', 'NP', 'SF', 'WN'].includes(key)) return 'power'
   if (['WT', 'WP', 'PM', 'PS', 'FS', 'HP', 'SC', 'LB'].includes(key)) return 'services'
   if (['PK', 'PZ'].includes(key)) return 'parks'
-  if (['road', 'power'].includes(key)) return 'roads'
+  if (['road', 'power', 'pipe'].includes(key)) return 'roads'
   return 'doze'
 }
 
