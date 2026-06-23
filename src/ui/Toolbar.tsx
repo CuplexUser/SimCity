@@ -1,16 +1,20 @@
 import { useRef, useState } from 'preact/hooks'
 import { Zone, Building, type ActiveTool, type BulldozeMode } from '../core/tile'
-import { type CoverageMode } from '../rendering/renderer'
+import { type OverlayMode } from '../rendering/renderer'
 
-// Coverage overlays shown in the View submenu (mutually exclusive; clicking the
-// active one turns it off). Each tints served tiles in its color and flags
-// uncovered zones red.
-const COVERAGE_OPTS: { mode: Exclude<CoverageMode, 'none'>; label: string; hint: string }[] = [
+// Data-layer overlays shown in the View submenu (mutually exclusive; clicking the
+// active one turns it off). Coverage overlays tint served tiles in their color
+// and flag uncovered zones red; gradient overlays paint a green→red heatmap.
+const OVERLAY_OPTS: { mode: Exclude<OverlayMode, 'none'>; label: string; hint: string }[] = [
   { mode: 'water',     label: 'Water Coverage',     hint: 'Water reach — blue = served, red = dry zones needing a water utility' },
-  { mode: 'police',    label: 'Police Coverage',    hint: 'Police reach — red zones have no coverage (high crime, low desirability)' },
+  { mode: 'police',    label: 'Police Coverage',    hint: 'Police reach — red zones have no coverage' },
   { mode: 'fire',      label: 'Fire Coverage',      hint: 'Fire-station reach — red zones are unprotected' },
   { mode: 'health',    label: 'Health Coverage',    hint: 'Hospital reach — red zones lack health coverage' },
   { mode: 'education', label: 'Education Coverage',  hint: 'School / library reach — red zones lack education' },
+  { mode: 'crime',     label: 'Crime',              hint: 'Crime heatmap — red = high-crime areas; build police stations' },
+  { mode: 'pollution', label: 'Pollution',          hint: 'Pollution heatmap — red = polluted; keep homes away from industry' },
+  { mode: 'traffic',   label: 'Traffic',            hint: 'Traffic heatmap — red = congested roads' },
+  { mode: 'landvalue', label: 'Land Value',         hint: 'Land-value heatmap — green = high value, red = low' },
 ]
 
 export type ToolKey =
@@ -137,8 +141,8 @@ interface Props {
   onNightMode:     (on: boolean) => void
   showZoneOverlay: boolean
   onZoneOverlay:   (on: boolean) => void
-  coverage:        CoverageMode
-  onCoverage:      (mode: CoverageMode) => void
+  overlay:         OverlayMode
+  onOverlay:       (mode: OverlayMode) => void
 }
 
 export function Toolbar({
@@ -146,7 +150,7 @@ export function Toolbar({
   onNewGame, onSaveState, onLoadState, onExportFile, onImportFile, onOptionsOpen,
   cityName, onCityNameChange, savedCities, status,
   nightMode, onNightMode, showZoneOverlay, onZoneOverlay,
-  coverage, onCoverage,
+  overlay, onOverlay,
 }: Props) {
   const [openCat, setOpenCat] = useState<CategoryId | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -262,10 +266,10 @@ export function Toolbar({
     if (openCat === 'view') return [
       toggleBtn('Night Mode',     nightMode,        onNightMode,     'Toggle night mode [N]'),
       toggleBtn('Zone Overlay',   showZoneOverlay,  onZoneOverlay,   'Show zone color overlay [V]'),
-      // Coverage overlays are mutually exclusive — selecting one clears the rest;
-      // clicking the active one turns the overlay off. [C] cycles through them.
-      ...COVERAGE_OPTS.map(({ mode, label, hint }) =>
-        toggleBtn(label, coverage === mode, (on) => onCoverage(on ? mode : 'none'), `${hint} [C]`)),
+      // Data-layer overlays are mutually exclusive — selecting one clears the
+      // rest; clicking the active one turns it off. [C] cycles through them.
+      ...OVERLAY_OPTS.map(({ mode, label, hint }) =>
+        toggleBtn(label, overlay === mode, (on) => onOverlay(on ? mode : 'none'), `${hint} [C]`)),
     ]
     return null
   }

@@ -18,6 +18,8 @@ interface ZoneResult {
 export interface GrowthFields {
   landValue?: Uint8Array
   pollution?: Uint8Array
+  traffic?:   Uint8Array
+  crime?:     Uint8Array
 }
 
 /**
@@ -68,7 +70,7 @@ export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer
 
   if (isYearTick) {
     const prevPop = population(world)
-    const { landValue, pollution } = fields ?? {}
+    const { landValue, pollution, traffic, crime } = fields ?? {}
 
     world.forEach((tile, col, row) => {
       if (tile.zone === Zone.None) return
@@ -78,6 +80,8 @@ export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer
       const idx = row * world.cols + col
       const lv = landValue ? landValue[idx] : 50
       const poll = pollution ? pollution[idx] : 0
+      const traf = traffic ? traffic[idx] : 0
+      const crm = crime ? crime[idx] : 0
 
       const demand =
         (tile.zone === Zone.Residential && rDemand) ||
@@ -96,7 +100,7 @@ export function stepZones(world: World, isYearTick: boolean, lotSizer?: LotSizer
       // plot can sustain; the city-population stage caps it from above so small
       // towns stay low-rise even when fully serviced.
       const stage = devStage(tile.zone, prevPop)
-      const desire = zoneDesirability(tile, lv, poll)
+      const desire = zoneDesirability(tile, lv, poll, traf, crm)
       const cap = Math.min(STAGE_DENSITY_CAP[stage], desirabilityDensityCap(desire))
 
       // Above the sustainable cap (e.g. a service was bulldozed, pollution rose):

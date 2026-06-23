@@ -28,13 +28,18 @@ import {
 import { loadSpriteAtlas, type AtlasLevel, type LoadedAtlas, type SpriteMeta } from './spriteAtlas'
 import { drawTerrainTexture } from './sprites'
 
-// ── Coverage overlays ────────────────────────────────────────────────────────
-// A family of data-layer views (like SimCity's query overlays) that tint every
-// tile by a service-coverage flag: covered tiles glow in the service color, and
-// zoned tiles the service does NOT reach are flagged red — the actionable gap
-// telling you where to drop the next station. 'none' hides the overlay.
+// ── Data-layer overlays ──────────────────────────────────────────────────────
+// A family of data-layer views (like SimCity's query overlays). Two kinds share
+// one Graphics layer:
+//   • Coverage  (binary): tint tiles a service reaches in its color; flag zoned
+//                tiles it misses red — where to drop the next station.
+//   • Gradient  (heatmap): color every tile by a 0..100 grid value (crime,
+//                pollution, traffic, land value) green→yellow→red.
+// 'none' hides the overlay.
 
-export type CoverageMode = 'none' | 'water' | 'police' | 'fire' | 'health' | 'education'
+export type CoverageMode = 'water' | 'police' | 'fire' | 'health' | 'education'
+export type GradientMode = 'crime' | 'pollution' | 'traffic' | 'landvalue'
+export type OverlayMode  = 'none' | CoverageMode | GradientMode
 
 interface CoverageDef {
   flag:    (t: Tile) => boolean
@@ -42,12 +47,33 @@ interface CoverageDef {
   color:   number   // covered-tile tint
 }
 
-const COVERAGE_DEFS: Record<Exclude<CoverageMode, 'none'>, CoverageDef> = {
+const COVERAGE_DEFS: Record<CoverageMode, CoverageDef> = {
   water:     { flag: (t) => t.watered,       sources: new Set([Building.WaterTower, Building.WaterPump, Building.PumpingStation]), color: 0x35a7e0 },
   police:    { flag: (t) => t.policed,       sources: new Set([Building.PoliceStation]), color: 0x3a6cff },
   fire:      { flag: (t) => t.fireProtected, sources: new Set([Building.FireStation]),   color: 0xff8c2a },
   health:    { flag: (t) => t.healthCovered, sources: new Set([Building.Hospital]),      color: 0x35e07a },
   education: { flag: (t) => t.educated,      sources: new Set([Building.School, Building.Library]), color: 0xffd23a },
+}
+
+// For land value high is good (green = desirable); for the others high is bad
+// (red = hot spot). `invert` flips the green↔red direction.
+const GRADIENT_DEFS: Record<GradientMode, { invert: boolean }> = {
+  crime:     { invert: false },
+  pollution: { invert: false },
+  traffic:   { invert: false },
+  landvalue: { invert: true },
+}
+
+function isGradient(mode: OverlayMode): mode is GradientMode {
+  return mode in GRADIENT_DEFS
+}
+
+/** Green (t=0) → yellow (0.5) → red (t=1) heatmap ramp. */
+function heatColor(t: number): number {
+  const c = Math.max(0, Math.min(1, t))
+  const r = c < 0.5 ? Math.round(0x2e + (0xff - 0x2e) * (c / 0.5)) : 0xff
+  const g = c < 0.5 ? 0xcc : Math.round(0xcc * (1 - (c - 0.5) / 0.5))
+  return (r << 16) | (g << 8) | 0x30
 }
 
 // Deterministic per-tile hash for picking a building variant from the atlas.
@@ -132,7 +158,7 @@ export class Renderer {
 
   // Fixed-zIndex overlay layers inside worldContainer
   private zoneLayerGfx!: Graphics    // zone outlines (+ fills when overlay enabled)
-  private coverageGfx!: Graphics     // coverage view (service color = served, red = uncovered zone)
+  private overlayGfx!: Graphics      // data-layer view (coverage or gradient heatmap)
   private hoverGfx!: Graphics       // hover highlight
   private _hoverW = 1               // footprint width  of the hovered placement
   private _hoverH = 1               // footprint height of the hovered placement
@@ -146,10 +172,11 @@ export class Renderer {
   // State flags
   private _nightMode        = false
   private _showZoneOverlay  = false
-  private _coverageMode: CoverageMode = 'none'
+  private _overlayMode: OverlayMode = 'none'
+  private _overlayGrid: Uint8Array | null = null  // gradient data (0..100 per tile)
   private _hoverIdx         = -1
   private _zoneLayerDirty   = true    // rebuild on first draw
-  private _coverageDirty    = true    // coverage view geometry
+  private _overlayDirty     = true    // data-layer view geometry
   private _waterListDirty   = true    // rebuild on first draw
 
   // Minimap
@@ -245,10 +272,10 @@ export class Renderer {
     this.zoneLayerGfx.zIndex = 60000
     this.worldContainer.addChild(this.zoneLayerGfx)
 
-    this.coverageGfx = new Graphics()
-    this.coverageGfx.zIndex = 61000   // above zone layer; below hover
-    this.coverageGfx.visible = false
-    this.worldContainer.addChild(this.coverageGfx)
+    this.overlayGfx = new Graphics()
+    this.overlayGfx.zIndex = 61000   // above zone layer; below hover
+    this.overlayGfx.visible = false
+    this.worldContainer.addChild(this.overlayGfx)
 
     this.hoverGfx = new Graphics()
     this.hoverGfx.zIndex = 80000
@@ -339,14 +366,14 @@ export class Renderer {
       world.dirty.clear()
       this.worldContainer.sortChildren()
 
-      // Tile changes may affect zone layer, coverage view, and water list
+      // Tile changes may affect zone layer, overlay view, and water list
       this._zoneLayerDirty = true
-      this._coverageDirty  = true
+      this._overlayDirty   = true
       this._waterListDirty = true
     }
 
     if (this._zoneLayerDirty) this._rebuildZoneLayer()
-    if (this._coverageMode !== 'none' && this._coverageDirty) this._rebuildCoverageLayer()
+    if (this._overlayMode !== 'none' && this._overlayDirty) this._rebuildOverlayLayer()
     if (this._waterListDirty) this._rebuildWaterList()
 
     // Animate water tiles (shimmer via tint oscillation, every frame)
@@ -440,25 +467,33 @@ export class Renderer {
     this._refreshBuildingTints()
   }
 
-  /** Select the coverage view (water / police / fire / health / education, or
-   *  'none' to hide it): tiles a service reaches glow in its color, zoned tiles
-   *  it misses turn red (where a new station is needed). */
-  setCoverageOverlay(mode: CoverageMode): void {
-    if (mode === this._coverageMode) return
-    this._coverageMode = mode
-    this._coverageDirty = true
-    this.coverageGfx.visible = mode !== 'none'
-    if (mode === 'none') this.coverageGfx.clear()
+  /** Select the data-layer overlay. Coverage modes (water/police/fire/health/
+   *  education) tint served tiles and flag uncovered zones red; gradient modes
+   *  (crime/pollution/traffic/landvalue) need a grid via setOverlayGrid. 'none'
+   *  hides it. */
+  setOverlay(mode: OverlayMode): void {
+    if (mode === this._overlayMode) return
+    this._overlayMode = mode
+    this._overlayDirty = true
+    this.overlayGfx.visible = mode !== 'none'
+    if (mode === 'none') this.overlayGfx.clear()
   }
 
-  getCoverageOverlay(): CoverageMode {
-    return this._coverageMode
+  getOverlay(): OverlayMode {
+    return this._overlayMode
+  }
+
+  /** Supply the heatmap data for a gradient overlay (0..100 per tile, row-major).
+   *  Ignored by coverage overlays. Marks the view dirty when the data changes. */
+  setOverlayGrid(grid: Uint8Array | null): void {
+    this._overlayGrid = grid
+    this._overlayDirty = true
   }
 
   /** Coverage flags (watered/policed/…) change during sim steps without going
    *  through world.set, so the UI pokes this each tick to refresh the live view. */
-  markCoverageDirty(): void {
-    this._coverageDirty = true
+  markOverlayDirty(): void {
+    this._overlayDirty = true
   }
 
   /** Tint for a building/lot sprite: zone color when the zone overlay is on (so a
@@ -893,32 +928,22 @@ export class Renderer {
     this._zoneLayerDirty = false
   }
 
-  // ── Coverage view ───────────────────────────────────────────────────────────
-  // A single Graphics tinting each tile by a service-coverage flag, so the player
-  // can see exactly how far the current stations reach and which zones still need
-  // service. Selected via setCoverageOverlay (water / police / fire / health /
-  // education).
-  //   service color = served (within a source's range)
-  //   red           = a zoned tile that is NOT served → drop a new station here
-  // Source buildings (always served) get a brighter ring so their hubs stand out.
+  // ── Data-layer view ─────────────────────────────────────────────────────────
+  // One Graphics renders whichever overlay is active. Coverage modes show how far
+  // stations reach (service color = served, red = uncovered zone, white ring =
+  // source building); gradient modes paint a green→red heatmap from a 0..100 grid.
 
-  private _rebuildCoverageLayer(): void {
-    if (this._coverageMode === 'none') return
-    const def = COVERAGE_DEFS[this._coverageMode]
-    const g  = this.coverageGfx
+  private _rebuildOverlayLayer(): void {
+    if (this._overlayMode === 'none') return
+    if (isGradient(this._overlayMode)) { this._rebuildGradientLayer(this._overlayMode); return }
+
+    const def = COVERAGE_DEFS[this._overlayMode]
+    const g  = this.overlayGfx
     const hw = BASE_HW, hh = BASE_HH
     g.clear()
 
     this.world.forEach((tile, col, row) => {
-      const x = (col - row) * hw
-      const y = (col + row) * hh - tile.elevation * BASE_EH
-      const s = 0.94
-      const pts = [
-        x,          y + hh * (1 - s),
-        x + hw * s, y + hh,
-        x,          y + hh * (1 + s),
-        x - hw * s, y + hh,
-      ]
+      const pts = this._tileDiamond(col, row, tile.elevation, hw, hh)
 
       if (def.flag(tile)) {
         g.poly(pts).fill({ color: def.color, alpha: 0.30 })
@@ -933,7 +958,41 @@ export class Renderer {
       }
     })
 
-    this._coverageDirty = false
+    this._overlayDirty = false
+  }
+
+  private _rebuildGradientLayer(mode: GradientMode): void {
+    const g = this.overlayGfx
+    const hw = BASE_HW, hh = BASE_HH
+    g.clear()
+    const grid = this._overlayGrid
+    if (!grid) { this._overlayDirty = false; return }
+
+    const { invert } = GRADIENT_DEFS[mode]
+    this.world.forEach((tile, col, row) => {
+      const v = grid[row * this.world.cols + col]
+      if (v <= 0) return
+      const t = v / 100
+      const color = heatColor(invert ? 1 - t : t)
+      // Faint at the low end, stronger as the value climbs, so hot spots pop.
+      g.poly(this._tileDiamond(col, row, tile.elevation, hw, hh))
+        .fill({ color, alpha: 0.18 + 0.32 * t })
+    })
+
+    this._overlayDirty = false
+  }
+
+  /** Diamond polygon points for a tile's top face, in worldContainer space. */
+  private _tileDiamond(col: number, row: number, elevation: number, hw: number, hh: number): number[] {
+    const x = (col - row) * hw
+    const y = (col + row) * hh - elevation * BASE_EH
+    const s = 0.94
+    return [
+      x,          y + hh * (1 - s),
+      x + hw * s, y + hh,
+      x,          y + hh * (1 + s),
+      x - hw * s, y + hh,
+    ]
   }
 
   // ── Water animation ───────────────────────────────────────────────────────

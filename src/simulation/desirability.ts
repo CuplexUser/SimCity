@@ -19,19 +19,23 @@ interface Weights {
   education: number
   landValue: number  // multiplied by landValue/100
   pollution: number  // multiplied by pollution/100 (subtracted)
+  traffic:   number  // multiplied by traffic/100   (subtracted) — congestion
+  crime:     number  // multiplied by crime/100     (subtracted)
 }
 
 const WEIGHTS: Record<Zone, Weights> = {
-  [Zone.None]:        { base: 0, police: 0, fire: 0, health: 0, education: 0, landValue: 0, pollution: 0 },
-  [Zone.Residential]: { base: 0.12, police: 0.16, fire: 0.14, health: 0.16, education: 0.16, landValue: 0.22, pollution: 0.40 },
-  [Zone.Commercial]:  { base: 0.15, police: 0.16, fire: 0.12, health: 0.06, education: 0.10, landValue: 0.28, pollution: 0.25 },
-  [Zone.Industrial]:  { base: 0.30, police: 0.08, fire: 0.16, health: 0.00, education: 0.06, landValue: 0.20, pollution: 0.08 },
+  [Zone.None]:        { base: 0, police: 0, fire: 0, health: 0, education: 0, landValue: 0, pollution: 0, traffic: 0, crime: 0 },
+  [Zone.Residential]: { base: 0.12, police: 0.16, fire: 0.14, health: 0.16, education: 0.16, landValue: 0.22, pollution: 0.40, traffic: 0.18, crime: 0.28 },
+  [Zone.Commercial]:  { base: 0.15, police: 0.16, fire: 0.12, health: 0.06, education: 0.10, landValue: 0.28, pollution: 0.25, traffic: 0.12, crime: 0.22 },
+  [Zone.Industrial]:  { base: 0.30, police: 0.08, fire: 0.16, health: 0.00, education: 0.06, landValue: 0.20, pollution: 0.08, traffic: 0.06, crime: 0.08 },
 }
 
 export function zoneDesirability(
   tile: Tile,
   landValue: number,  // 0..100
   pollution: number,  // 0..100
+  traffic = 0,        // 0..100
+  crime = 0,          // 0..100
 ): number {
   const w = WEIGHTS[tile.zone]
   if (!w) return 0
@@ -43,6 +47,8 @@ export function zoneDesirability(
   if (tile.educated)      d += w.education
   d += w.landValue * (landValue / 100)
   d -= w.pollution * (pollution / 100)
+  d -= w.traffic   * (traffic / 100)
+  d -= w.crime     * (crime / 100)
 
   return Math.max(0, Math.min(1, d))
 }

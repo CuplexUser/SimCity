@@ -14,10 +14,17 @@ import { SpeedControl } from './ui/SpeedControl'
 import { BUILDING_DEFS, ZONE_COST, OVERLAY_COST, buildingFootprint, allowsRoadUnder } from './data/buildings'
 import { canPlaceFootprint, placeFootprint } from './core/footprint'
 import { Minimap } from './rendering/minimap'
-import { type CoverageMode } from './rendering/renderer'
+import { type OverlayMode } from './rendering/renderer'
+import { type GridMode } from './simulation/simManager'
 
+// Gradient (heatmap) overlays read a recomputed grid from the sim; the rest are
+// binary coverage overlays driven by tile flags.
+const GRADIENT_MODES = new Set<OverlayMode>(['crime', 'pollution', 'traffic', 'landvalue'])
 // Order the [C] hotkey cycles through (then wraps back to 'none').
-const COVERAGE_CYCLE: CoverageMode[] = ['none', 'water', 'police', 'fire', 'health', 'education']
+const OVERLAY_CYCLE: OverlayMode[] = [
+  'none', 'water', 'police', 'fire', 'health', 'education',
+  'crime', 'pollution', 'traffic', 'landvalue',
+]
 
 declare global {
   interface Window {
@@ -46,11 +53,11 @@ function App() {
   const [savedCities, setSavedCities] = useState<string[]>([])
   const [nightMode, setNightMode] = useState(false)
   const [showZoneOverlay, setShowZoneOverlay] = useState(false)
-  const [coverage, setCoverage] = useState<CoverageMode>('none')
+  const [overlay, setOverlay] = useState<OverlayMode>('none')
 
   const nightModeRef      = useRef(false)
   const zoneOverlayRef    = useRef(false)
-  const coverageRef       = useRef<CoverageMode>('none')
+  const overlayRef        = useRef<OverlayMode>('none')
 
   useEffect(() => {
     toolRef.current = activeKey ? keyToTool(activeKey) : null
@@ -74,10 +81,16 @@ function App() {
     engineRef.current?.renderer?.setZoneOverlay(on)
   }
 
-  function handleCoverage(mode: CoverageMode) {
-    coverageRef.current = mode
-    setCoverage(mode)
-    engineRef.current?.renderer?.setCoverageOverlay(mode)
+  function handleOverlay(mode: OverlayMode) {
+    overlayRef.current = mode
+    setOverlay(mode)
+    const eng = engineRef.current
+    if (!eng?.renderer) return
+    eng.renderer.setOverlay(mode)
+    // Gradient overlays need their grid pushed; coverage overlays read tile flags.
+    eng.renderer.setOverlayGrid(
+      mode !== 'none' && GRADIENT_MODES.has(mode) ? eng.sim.grid(mode as GridMode) : null,
+    )
   }
 
   function resetUiState(yearValue = 2000, populationValue = 0, fundsValue = 20_000) {
@@ -226,7 +239,7 @@ function App() {
         activeTool: toolRef.current,
         camera: { zoom: eng.camera.zoom, panX: eng.camera.panX, panY: eng.camera.panY },
         services: { policedTiles: policed, fireProtectedTiles: fireProtected, healthCoveredTiles: healthCovered, educatedTiles: educated },
-        coverageOverlay: coverageRef.current,
+        overlay: overlayRef.current,
         buildings,
       })
     }
@@ -532,8 +545,8 @@ function App() {
         case 'n': case 'N':  handleNightMode(!nightModeRef.current);                    break
         case 'v': case 'V':  handleZoneOverlay(!zoneOverlayRef.current);                break
         case 'c': case 'C': {
-          const next = COVERAGE_CYCLE[(COVERAGE_CYCLE.indexOf(coverageRef.current) + 1) % COVERAGE_CYCLE.length]
-          handleCoverage(next)
+          const next = OVERLAY_CYCLE[(OVERLAY_CYCLE.indexOf(overlayRef.current) + 1) % OVERLAY_CYCLE.length]
+          handleOverlay(next)
           break
         }
       }
@@ -549,9 +562,13 @@ function App() {
       setPop(eng.sim.population)
       setPower({ ...eng.sim.power })
       setWater({ ...eng.sim.water })
-      // Coverage flags change inside the sim step (not via world.set), so refresh
-      // the live coverage view each tick while one is showing.
-      if (coverageRef.current !== 'none') eng.renderer?.markCoverageDirty()
+      // Coverage flags / heatmap values change inside the sim step (not via
+      // world.set), so refresh the live overlay each tick while one is showing.
+      const mode = overlayRef.current
+      if (mode !== 'none') {
+        if (GRADIENT_MODES.has(mode)) eng.renderer?.setOverlayGrid(eng.sim.grid(mode as GridMode))
+        else eng.renderer?.markOverlayDirty()
+      }
     })
 
     const offYear = events.on<YearEvent>('year', ({ year, revenue, expenses }) => {
@@ -608,8 +625,8 @@ function App() {
         onNightMode={handleNightMode}
         showZoneOverlay={showZoneOverlay}
         onZoneOverlay={handleZoneOverlay}
-        coverage={coverage}
-        onCoverage={handleCoverage}
+        overlay={overlay}
+        onOverlay={handleOverlay}
       />
       <BottomBar year={year} population={pop} funds={funds} power={power} water={water} />
       <SpeedControl speed={speed} onSpeedChange={handleSpeedChange} />

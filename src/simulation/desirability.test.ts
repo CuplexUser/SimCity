@@ -39,6 +39,15 @@ describe('zoneDesirability', () => {
     expect(rDrop).toBeGreaterThan(iDrop)
   })
 
+  it('crime and traffic lower desirability', () => {
+    const served = tile(Zone.Residential, {
+      policed: true, fireProtected: true, healthCovered: true, educated: true,
+    })
+    const clean = zoneDesirability(served, 100, 0, 0, 0)
+    expect(zoneDesirability(served, 100, 0, 100, 0)).toBeLessThan(clean) // heavy traffic
+    expect(zoneDesirability(served, 100, 0, 0, 100)).toBeLessThan(clean) // high crime
+  })
+
   it('clamps to the 0..1 range', () => {
     const maxed = tile(Zone.Residential, {
       policed: true, fireProtected: true, healthCovered: true, educated: true,

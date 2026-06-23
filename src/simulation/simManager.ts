@@ -3,12 +3,16 @@ import { events, type TickEvent, type YearEvent, type LogEvent } from '../core/e
 import { stepPower, type PowerStats } from './power'
 import { stepWater, type WaterStats } from './water'
 import { stepZones, type LotSizer, type GrowthFields } from './zones'
-import { stepCrime } from './crime'
+import { stepCrime, computeCrime } from './crime'
 import { stepFire } from './fire'
 import { stepServices } from './services'
 import { computeLandValue } from './landValue'
 import { computePollution } from './pollution'
+import { computeTraffic } from './traffic'
 import { computeBudget } from './economy'
+
+/** Heatmap grids the data-layer overlays can request on demand (0..100 per tile). */
+export type GridMode = 'crime' | 'pollution' | 'traffic' | 'landvalue'
 
 const TICKS_PER_YEAR = 12  // 1 tick = 1 game month
 
@@ -48,6 +52,8 @@ export class SimManager {
       fields = {
         landValue: computeLandValue(this.world),
         pollution: computePollution(this.world),
+        traffic:   computeTraffic(this.world),
+        crime:     computeCrime(this.world),
       }
     }
     const { population } = stepZones(this.world, isYearTick, this.lotSizer, fields)
@@ -71,6 +77,17 @@ export class SimManager {
       if (this.funds < 0) {
         events.emit<LogEvent>('log', { message: 'Warning: City funds in deficit!' })
       }
+    }
+  }
+
+  /** Compute a fresh heatmap grid for a data-layer overlay. Called by the UI only
+   *  while that overlay is showing, so the cost stays off the normal sim path. */
+  grid(mode: GridMode): Uint8Array {
+    switch (mode) {
+      case 'crime':     return computeCrime(this.world)
+      case 'pollution': return computePollution(this.world)
+      case 'traffic':   return computeTraffic(this.world)
+      case 'landvalue': return computeLandValue(this.world)
     }
   }
 
