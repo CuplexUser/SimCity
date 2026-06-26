@@ -10,13 +10,15 @@ all 8 travel directions the road network uses:
 
 Output: tools/assets-src/car_<dir>_<variant>__<style>.png  + merged spriteMap.json
 entries keyed  car:<dir>:<variant>  (anchor = the car's ground center, the point
-that sits on the road). Then:
+that sits on the road).
 
-    blender -b -P tools/blender/render_cars.py -- --out tools/assets-src
-    pnpm build:atlas          # packs the PNGs into public/sprites/
-
-The game already renders cars from a procedural fallback (tileTextures.ts); this
-script just upgrades the same `car:*` keys with real geometry.
+NOTE: the *default* car pipeline is now `tools/genCars.mjs` (`pnpm gen:cars`),
+which renders the shared `src/rendering/carModel.js` silhouette with
+@napi-rs/canvas so the atlas cars exactly match the runtime fallback — and
+`pnpm build:atlas` re-runs it automatically. This Blender script is the optional
+higher-detail alternative (`pnpm gen:cars:blender`); after running it, pack with
+`node tools/buildAtlas.mjs` directly (NOT `pnpm build:atlas`, which would
+regenerate the procedural cars over these). Both write the same `car:*` keys.
 
 Geometry contract (must match src/rendering/isoCamera.ts):
     1 tile = 64×32 px (2:1). 1 Blender unit = 1 tile. Camera ORTHO, azimuth 45°,

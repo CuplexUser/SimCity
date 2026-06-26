@@ -12,8 +12,9 @@
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "gen:atlas": "node tools/genStarterAtlas.mjs",
-    "build:atlas": "node tools/buildAtlas.mjs",
-    "gen:cars": "blender -b -P tools/blender/render_cars.py -- --out tools/assets-src"
+    "build:atlas": "node tools/genCars.mjs && node tools/buildAtlas.mjs",
+    "gen:cars": "node tools/genCars.mjs",
+    "gen:cars:blender": "blender -b -P tools/blender/render_cars.py -- --out tools/assets-src"
   },
   "dependencies": {
     "idb-keyval": "^6.2.1",

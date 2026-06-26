@@ -2383,260 +2383,260 @@
     "anchorY": 184,
     "tilePx": 136
   },
-  "car_se_0__sedan.png": {
-    "key": "car:se:0",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_sw_0__sedan.png": {
-    "key": "car:sw:0",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_ne_0__sedan.png": {
+  "car_ne_0.png": {
     "key": "car:ne:0",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_nw_0__sedan.png": {
-    "key": "car:nw:0",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_s_0__sedan.png": {
-    "key": "car:s:0",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_e_0__sedan.png": {
-    "key": "car:e:0",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_n_0__sedan.png": {
-    "key": "car:n:0",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_w_0__sedan.png": {
-    "key": "car:w:0",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_se_1__sedan.png": {
-    "key": "car:se:1",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_sw_1__sedan.png": {
-    "key": "car:sw:1",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_ne_1__sedan.png": {
+  "car_ne_1.png": {
     "key": "car:ne:1",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_nw_1__sedan.png": {
-    "key": "car:nw:1",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_s_1__sedan.png": {
-    "key": "car:s:1",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_e_1__sedan.png": {
-    "key": "car:e:1",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_n_1__sedan.png": {
-    "key": "car:n:1",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_w_1__sedan.png": {
-    "key": "car:w:1",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_se_2__sedan.png": {
-    "key": "car:se:2",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_sw_2__sedan.png": {
-    "key": "car:sw:2",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_ne_2__sedan.png": {
+  "car_ne_2.png": {
     "key": "car:ne:2",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_nw_2__sedan.png": {
-    "key": "car:nw:2",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_s_2__sedan.png": {
-    "key": "car:s:2",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_e_2__sedan.png": {
-    "key": "car:e:2",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_n_2__sedan.png": {
-    "key": "car:n:2",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_w_2__sedan.png": {
-    "key": "car:w:2",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_se_3__sedan.png": {
-    "key": "car:se:3",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_sw_3__sedan.png": {
-    "key": "car:sw:3",
-    "footW": 1,
-    "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
-  },
-  "car_ne_3__sedan.png": {
+  "car_ne_3.png": {
     "key": "car:ne:3",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_nw_3__sedan.png": {
+  "car_se_0.png": {
+    "key": "car:se:0",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_se_1.png": {
+    "key": "car:se:1",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_se_2.png": {
+    "key": "car:se:2",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_se_3.png": {
+    "key": "car:se:3",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_sw_0.png": {
+    "key": "car:sw:0",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_sw_1.png": {
+    "key": "car:sw:1",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_sw_2.png": {
+    "key": "car:sw:2",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_sw_3.png": {
+    "key": "car:sw:3",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_nw_0.png": {
+    "key": "car:nw:0",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_nw_1.png": {
+    "key": "car:nw:1",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_nw_2.png": {
+    "key": "car:nw:2",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_nw_3.png": {
     "key": "car:nw:3",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_s_3__sedan.png": {
-    "key": "car:s:3",
+  "car_n_0.png": {
+    "key": "car:n:0",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_e_3__sedan.png": {
-    "key": "car:e:3",
+  "car_n_1.png": {
+    "key": "car:n:1",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_n_3__sedan.png": {
+  "car_n_2.png": {
+    "key": "car:n:2",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_n_3.png": {
     "key": "car:n:3",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   },
-  "car_w_3__sedan.png": {
+  "car_e_0.png": {
+    "key": "car:e:0",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_e_1.png": {
+    "key": "car:e:1",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_e_2.png": {
+    "key": "car:e:2",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_e_3.png": {
+    "key": "car:e:3",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_s_0.png": {
+    "key": "car:s:0",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_s_1.png": {
+    "key": "car:s:1",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_s_2.png": {
+    "key": "car:s:2",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_s_3.png": {
+    "key": "car:s:3",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_w_0.png": {
+    "key": "car:w:0",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_w_1.png": {
+    "key": "car:w:1",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_w_2.png": {
+    "key": "car:w:2",
+    "footW": 1,
+    "footH": 1,
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
+  },
+  "car_w_3.png": {
     "key": "car:w:3",
     "footW": 1,
     "footH": 1,
-    "anchorX": 205,
-    "anchorY": 205,
-    "tilePx": 362
+    "anchorX": 192,
+    "anchorY": 168,
+    "tilePx": 384
   }
 }
