@@ -45,4 +45,16 @@ describe('computeTraffic', () => {
     world.set(40, 40, { overlay: Overlay.Road })
     expect(computeTraffic(world)[40 * world.cols + 40]).toBe(0)
   })
+
+  it('routes commuter trips along a diagonal road corridor', () => {
+    const world = new World()
+    // A diagonal road corridor from a home (top-left) to a job (bottom-right).
+    for (let i = 5; i <= 15; i++) world.set(i, i, { overlay: Overlay.RoadDiag })
+    world.set(4, 5, { zone: Zone.Residential, density: 8 })   // adjacent to diag road (5,5)
+    world.set(16, 15, { zone: Zone.Commercial, density: 8 })  // adjacent to diag road (15,15)
+
+    const traffic = computeTraffic(world)
+    // A mid-corridor diagonal tile carries the through trip.
+    expect(traffic[10 * world.cols + 10]).toBeGreaterThan(0)
+  })
 })

@@ -2,7 +2,35 @@ import { type World } from '../core/world'
 import { Overlay, Zone } from '../core/tile'
 
 const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]] as const
+const DIAG = [[1, 1], [-1, -1], [1, -1], [-1, 1]] as const
 const MAX_TRIP = 60  // cap a single trip's length so it can't crawl the whole map
+
+/**
+ * Connected road neighbors of tile `i`, written into `out` (length ≥ 8), count
+ * returned. Mirrors the car lane graph: orthogonal links along any road; diagonal
+ * links only when this tile or the neighbor is a diagonal road (so trips never cut
+ * across the empty corner of two orthogonal roads).
+ */
+function roadNeighbors(
+  i: number, C: number, R: number,
+  isRoad: Uint8Array, isDiag: Uint8Array, out: Int32Array,
+): number {
+  const cc = i % C, cr = (i / C) | 0
+  let n = 0
+  for (const [dc, dr] of DIRS) {
+    const nc = cc + dc, nr = cr + dr
+    if (nc < 0 || nr < 0 || nc >= C || nr >= R) continue
+    const ni = nr * C + nc
+    if (isRoad[ni]) out[n++] = ni
+  }
+  for (const [dc, dr] of DIAG) {
+    const nc = cc + dc, nr = cr + dr
+    if (nc < 0 || nr < 0 || nc >= C || nr >= R) continue
+    const ni = nr * C + nc
+    if (isRoad[ni] && (isDiag[i] || isDiag[ni])) out[n++] = ni
+  }
+  return n
+}
 
 /**
  * Traffic load per tile (0..100), routed along the actual road network — this
@@ -26,12 +54,16 @@ const MAX_TRIP = 60  // cap a single trip's length so it can't crawl the whole m
  */
 export function computeTraffic(world: World): Uint8Array {
   const C = world.cols, R = world.rows, N = C * R
-  const isRoad = new Uint8Array(N)
+  const isRoad = new Uint8Array(N)  // orthogonal OR diagonal road
+  const isDiag = new Uint8Array(N)  // diagonal road only
   const homeW  = new Float64Array(N)  // residential trip volume injected per road tile
   const jobW   = new Float64Array(N)  // job attraction injected per road tile
+  const nbuf   = new Int32Array(8)    // scratch neighbor list
 
   world.forEach((tile, col, row) => {
-    if (tile.overlay & Overlay.Road) isRoad[row * C + col] = 1
+    const i = row * C + col
+    if (tile.overlay & (Overlay.Road | Overlay.RoadDiag)) isRoad[i] = 1
+    if (tile.overlay & Overlay.RoadDiag) isDiag[i] = 1
   })
 
   // 1. Inject demand from each developed zone onto its adjacent road tiles.
@@ -58,13 +90,11 @@ export function computeTraffic(world: World): Uint8Array {
   }
   while (head < tail) {
     const cur = queue[head++]
-    const cc = cur % C, cr = (cur / C) | 0
     const nd = dist[cur] + 1
-    for (const [dc, dr] of DIRS) {
-      const nc = cc + dc, nr = cr + dr
-      if (nc < 0 || nr < 0 || nc >= C || nr >= R) continue
-      const ni = nr * C + nc
-      if (!isRoad[ni] || dist[ni] !== -1) continue
+    const cnt = roadNeighbors(cur, C, R, isRoad, isDiag, nbuf)
+    for (let k = 0; k < cnt; k++) {
+      const ni = nbuf[k]
+      if (dist[ni] !== -1) continue
       dist[ni] = nd
       queue[tail++] = ni
     }
@@ -81,13 +111,10 @@ export function computeTraffic(world: World): Uint8Array {
     if (vol <= 0 || dist[i] < 0) continue   // no demand, or no road path to any job
     let cur = i, steps = 0
     while (dist[cur] > 0 && steps < MAX_TRIP) {
-      const cc = cur % C, cr = (cur / C) | 0
       let next = -1
-      for (const [dc, dr] of DIRS) {
-        const nc = cc + dc, nr = cr + dr
-        if (nc < 0 || nr < 0 || nc >= C || nr >= R) continue
-        const ni = nr * C + nc
-        if (isRoad[ni] && dist[ni] === dist[cur] - 1) { next = ni; break }
+      const cnt = roadNeighbors(cur, C, R, isRoad, isDiag, nbuf)
+      for (let k = 0; k < cnt; k++) {
+        if (dist[nbuf[k]] === dist[cur] - 1) { next = nbuf[k]; break }
       }
       if (next < 0) break
       load[next] += vol

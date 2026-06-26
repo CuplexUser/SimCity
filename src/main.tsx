@@ -62,6 +62,7 @@ function App() {
   const [savedCities, setSavedCities] = useState<string[]>([])
   const [nightMode, setNightMode] = useState(false)
   const [showZoneOverlay, setShowZoneOverlay] = useState(false)
+  const [showCars, setShowCars] = useState(true)
   const [overlay, setOverlay] = useState<OverlayMode>('none')
 
   // ── Dashboard + tile-query panels ──────────────────────────────────────────
@@ -104,6 +105,11 @@ function App() {
     zoneOverlayRef.current = on
     setShowZoneOverlay(on)
     engineRef.current?.renderer?.setZoneOverlay(on)
+  }
+
+  function handleCars(on: boolean) {
+    setShowCars(on)
+    engineRef.current?.renderer?.setCarsEnabled(on)
   }
 
   function handleOverlay(mode: OverlayMode) {
@@ -476,7 +482,7 @@ function App() {
     let zoneDrag: { start: { col: number; row: number }; end: { col: number; row: number } } | null = null
     // Drag-to-build: road/power/pipe tools drag out a straight segment locked to
     // the dominant axis (SimCity-style), previewed live and applied on mouseup.
-    let lineDrag: { start: { col: number; row: number }; end: { col: number; row: number }; kind: 'road' | 'power' | 'pipe' } | null = null
+    let lineDrag: { start: { col: number; row: number }; end: { col: number; row: number }; kind: 'road' | 'roaddiag' | 'power' | 'pipe' } | null = null
 
     // Lock a drag endpoint to the start tile's row or column, whichever axis the
     // cursor has moved furthest along, so segments are always straight.
@@ -486,9 +492,44 @@ function App() {
         : { col: start.col, row: end.row }
     }
 
+    // Lock a drag endpoint to one of the two grid diagonals (col±row constant),
+    // so a diagonal-road segment is always a clean 45° run.
+    function constrainDiagEnd(start: { col: number; row: number }, end: { col: number; row: number }) {
+      const dc = end.col - start.col, dr = end.row - start.row
+      // Project onto whichever diagonal the cursor has travelled furthest along:
+      // NW-SE axis is (1,1) (dc+dr), NE-SW axis is (1,-1) (dc-dr).
+      if (Math.abs(dc + dr) >= Math.abs(dc - dr)) {
+        const k = Math.round((dc + dr) / 2)
+        return { col: start.col + k, row: start.row + k }
+      }
+      const k = Math.round((dc - dr) / 2)
+      return { col: start.col + k, row: start.row - k }
+    }
+
+    // The single road tool snaps a drag to the nearest of 8 compass directions:
+    // an orthogonal axis lays grid road, a 45° diagonal lays diagonal road. Pick
+    // whichever constrained endpoint sits closest to the raw cursor tile.
+    function constrainRoadEnd(start: { col: number; row: number }, end: { col: number; row: number }) {
+      const ortho = constrainLineEnd(start, end)
+      const diag  = constrainDiagEnd(start, end)
+      const dO = Math.hypot(end.col - ortho.col, end.row - ortho.row)
+      const dD = Math.hypot(end.col - diag.col,  end.row - diag.row)
+      return dD < dO ? diag : ortho
+    }
+
     function showLinePreview() {
       if (!lineDrag) return
       const { start, end } = lineDrag
+      const dc = Math.sign(end.col - start.col), dr = Math.sign(end.row - start.row)
+      // A 45° segment (both deltas nonzero) lays diagonal road, so preview the
+      // actual diagonal tiles — a bounding-box rect would be misleading.
+      if (dc !== 0 && dr !== 0) {
+        const len = Math.max(Math.abs(end.col - start.col), Math.abs(end.row - start.row))
+        const tiles: { col: number; row: number }[] = []
+        for (let i = 0, c = start.col, r = start.row; i <= len; i++, c += dc, r += dr) tiles.push({ col: c, row: r })
+        eng.renderer?.setHoverPath(tiles)
+        return
+      }
       eng.renderer?.setHoverTile(
         Math.min(start.col, end.col), Math.min(start.row, end.row),
         Math.abs(end.col - start.col) + 1, Math.abs(end.row - start.row) + 1,
@@ -497,27 +538,43 @@ function App() {
 
     // Place one road/power tile: 'skip' passes over tiles that already have the
     // overlay (no charge), 'blocked' stops the whole segment at an obstacle.
-    function placeOverlayTile(col: number, row: number, kind: 'road' | 'power' | 'pipe'): 'placed' | 'skip' | 'blocked' {
-      const overlay = kind === 'road' ? Overlay.Road : kind === 'power' ? Overlay.PowerLine : Overlay.Pipe
+    function placeOverlayTile(col: number, row: number, kind: 'road' | 'roaddiag' | 'power' | 'pipe'): 'placed' | 'skip' | 'blocked' {
+      const overlay = kind === 'road' ? Overlay.Road
+        : kind === 'roaddiag' ? Overlay.RoadDiag
+        : kind === 'power' ? Overlay.PowerLine : Overlay.Pipe
       const t = eng.world.get(col, row)
       if (t.overlay & overlay)          return 'skip'
       if (t.building !== Building.None) return 'blocked'
       // A building's allocated plot (covered footprint tiles) is reserved — no overlays.
       if (t.rootCol !== -1 || t.rootRow !== -1) return 'blocked'
+      // Orthogonal and diagonal roads are mutually exclusive on a tile.
+      const isRoad = kind === 'road' || kind === 'roaddiag'
+      if (isRoad && (t.overlay & (Overlay.Road | Overlay.RoadDiag))) return 'blocked'
       // Roads need clear ground; power lines and (underground) water pipes may run
       // under developed lots and across water terrain.
-      if (kind === 'road' && (t.density > 0 || t.terrain === Terrain.Water)) return 'blocked'
+      if (isRoad && (t.density > 0 || t.terrain === Terrain.Water)) return 'blocked'
       if (!spendFunds(OVERLAY_COST[overlay] ?? 0)) return 'blocked'
-      eng.world.set(col, row, { overlay: t.overlay | overlay })
+      // A road paved over an unbuilt zoned plot consumes it — clear the zoning so
+      // the tile reads as road, not a vacant zone outline underneath.
+      const dezone = isRoad && t.zone !== Zone.None
+      eng.world.set(col, row, dezone
+        ? { overlay: t.overlay | overlay, zone: Zone.None }
+        : { overlay: t.overlay | overlay })
+      if (dezone) eng.renderer?.minimap.markDirty()
       return 'placed'
     }
 
-    function applyOverlayLine(a: { col: number; row: number }, b: { col: number; row: number }, kind: 'road' | 'power' | 'pipe') {
+    function applyOverlayLine(a: { col: number; row: number }, b: { col: number; row: number }, kind: 'road' | 'roaddiag' | 'power' | 'pipe') {
       const dc = Math.sign(b.col - a.col), dr = Math.sign(b.row - a.row)
-      const len = Math.abs(b.col - a.col) + Math.abs(b.row - a.row) // one axis is always 0
+      // max() rather than sum so the same stepper walks both axis-aligned segments
+      // (one delta is 0) and 45° diagonal segments (equal-magnitude deltas).
+      const len = Math.max(Math.abs(b.col - a.col), Math.abs(b.row - a.row))
+      // The unified road tool lays a 45° run (both deltas nonzero) as diagonal
+      // road and an axis run as grid road; power/pipe stay as their own kind.
+      const segKind = kind === 'road' && dc !== 0 && dr !== 0 ? 'roaddiag' : kind
       for (let i = 0, c = a.col, r = a.row; i <= len; i++, c += dc, r += dr) {
         if (!eng.world.inBounds(c, r)) break
-        if (placeOverlayTile(c, r, kind) === 'blocked') break
+        if (placeOverlayTile(c, r, segKind) === 'blocked') break
       }
     }
 
@@ -599,11 +656,18 @@ function App() {
         return
       }
 
-      // Extending a road/power line drag: lock to the dominant axis and preview.
+      // Extending a road/power line drag: lock to a straight segment (the road
+      // tool also allows 45° diagonals) and preview.
       if (lineDrag) {
         const rect = canvas.getBoundingClientRect()
         const hit  = findHitTile(e.clientX - rect.left, e.clientY - rect.top)
-        if (hit) { lineDrag.end = constrainLineEnd(lineDrag.start, hit); showLinePreview() }
+        if (hit) {
+          // The road tool snaps to 8 directions (grid + diagonal); power/pipe to axes.
+          lineDrag.end = lineDrag.kind === 'road'
+            ? constrainRoadEnd(lineDrag.start, hit)
+            : constrainLineEnd(lineDrag.start, hit)
+          showLinePreview()
+        }
         return
       }
 
@@ -693,6 +757,8 @@ function App() {
       setPower({ ...eng.sim.power })
       setWater({ ...eng.sim.water })
       setBurning(eng.sim.burning)
+      // Bias the animated traffic toward congested roads (recomputed at 1 Hz).
+      eng.renderer?.setTrafficField(eng.sim.grid('traffic'))
       // Keep the tile-query popup and (if open) the budget figures live.
       if (queriedRef.current) {
         const { col, row } = queriedRef.current
@@ -769,6 +835,8 @@ function App() {
         onNightMode={handleNightMode}
         showZoneOverlay={showZoneOverlay}
         onZoneOverlay={handleZoneOverlay}
+        showCars={showCars}
+        onCars={handleCars}
         overlay={overlay}
         onOverlay={handleOverlay}
       />

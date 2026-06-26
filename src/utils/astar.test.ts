@@ -7,6 +7,10 @@ function road(world: World, col: number, row: number) {
   world.set(col, row, { overlay: Overlay.Road })
 }
 
+function diag(world: World, col: number, row: number) {
+  world.set(col, row, { overlay: Overlay.RoadDiag })
+}
+
 describe('findRoadPath', () => {
   it('returns null if start has no road', () => {
     const world = new World()
@@ -114,5 +118,51 @@ describe('isRoadConnected', () => {
   it('returns false for out-of-bounds tile', () => {
     const world = new World()
     expect(isRoadConnected(world, -1, -1)).toBe(false)
+  })
+})
+
+describe('diagonal roads', () => {
+  it('routes a path along a chain of diagonal roads', () => {
+    const world = new World()
+    for (let i = 0; i <= 4; i++) diag(world, i, i)
+    const path = findRoadPath(world, 0, 0, 4, 4)
+    expect(path).not.toBeNull()
+    expect(path![path!.length - 1]).toEqual({ col: 4, row: 4 })
+    // Diagonal hops cover the run in 5 tiles, not via an orthogonal detour.
+    expect(path!.length).toBe(5)
+  })
+
+  it('merges a diagonal run into an orthogonal road', () => {
+    const world = new World()
+    // Orthogonal arm along row 0, diagonal arm rising to it.
+    for (let c = 0; c <= 3; c++) road(world, c, 0)
+    diag(world, 4, 1); diag(world, 5, 2)
+    // The diagonal tile (4,1) connects to orthogonal (3,0) at the shared corner.
+    const path = findRoadPath(world, 5, 2, 0, 0)
+    expect(path).not.toBeNull()
+    expect(path![path!.length - 1]).toEqual({ col: 0, row: 0 })
+  })
+
+  it('does not cut across the empty corner of two orthogonal roads', () => {
+    const world = new World()
+    // An L: (0,0)-(1,0) and (1,0)-(1,1). The diagonal (0,0)->(1,1) is empty,
+    // so a path must go through the corner (1,0), never diagonally.
+    road(world, 0, 0); road(world, 1, 0); road(world, 1, 1)
+    const path = findRoadPath(world, 0, 0, 1, 1)
+    expect(path).not.toBeNull()
+    expect(path).toContainEqual({ col: 1, row: 0 })
+    expect(path!.length).toBe(3)
+  })
+
+  it('counts diagonal roads as connected segments for zone access', () => {
+    const world = new World()
+    diag(world, 5, 5); diag(world, 6, 6)
+    expect(isRoadConnected(world, 5, 5, 1)).toBe(true)
+  })
+
+  it('treats an isolated single diagonal road as unconnected', () => {
+    const world = new World()
+    diag(world, 5, 5)
+    expect(isRoadConnected(world, 5, 5, 1)).toBe(false)
   })
 })

@@ -17,7 +17,16 @@
 import { Texture } from 'pixi.js'
 import { Zone, Overlay, Building, type Tile } from '../core/tile'
 import { TILE_W, TILE_H } from './isoCamera'
-import { drawZoneBuilding, drawBuilding, drawRoadTile } from './tileRenderer'
+import {
+  drawZoneBuilding, drawBuilding, drawRoadTile, drawDiagRoadTile,
+  drawCar, CAR_DIRS, type CarDir,
+} from './tileRenderer'
+
+// Number of distinct car color variants baked per direction.
+export const CAR_VARIANTS = 4
+// Car sprite canvas (centered): wide/tall enough for a car at any of the 8 angles.
+const CAR_CANVAS_W = TILE_W       // 64
+const CAR_CANVAS_H = TILE_H + 24  // 56 — headroom for the raised cabin box
 
 // ── Canvas dimension constants ─────────────────────────────────────────────────
 
@@ -35,6 +44,16 @@ export function getBuildingKey(tile: Tile): string {
 
 export function getOverlayKey(overlay: number, roadMask: number): string {
   return `o:${overlay}:${roadMask}`
+}
+
+/** Diagonal-road overlay key, keyed by its 4-bit diagonal-neighbor mask. */
+export function getDiagOverlayKey(diagMask: number): string {
+  return `od:${diagMask}`
+}
+
+/** Car sprite key: travel direction + color variant. */
+export function getCarKey(dir: CarDir, variant: number): string {
+  return `car:${dir}:${variant}`
 }
 
 // ── Internal bakers ────────────────────────────────────────────────────────────
@@ -67,6 +86,33 @@ function bakeRoadOverlay(roadMask: number, scale: number): Texture {
   ctx.scale(scale, scale)
 
   drawRoadTile(ctx, cx, cy, hw, hh, roadMask, 1)
+
+  return Texture.from(oc.transferToImageBitmap())
+}
+
+function bakeDiagRoadOverlay(diagMask: number, scale: number): Texture {
+  const hw = TILE_W / 2, hh = TILE_H / 2
+  const cx = TILE_W / 2  // 32
+  const cy = 0           // tile apex at top of canvas
+
+  const oc  = new OffscreenCanvas(TILE_W * scale, TILE_H * scale)
+  const ctx = oc.getContext('2d')!
+  ctx.scale(scale, scale)
+
+  drawDiagRoadTile(ctx, cx, cy, hw, hh, diagMask, 1)
+
+  return Texture.from(oc.transferToImageBitmap())
+}
+
+function bakeCar(dir: CarDir, variant: number, scale: number): Texture {
+  const hw = TILE_W / 2, hh = TILE_H / 2
+  const cx = CAR_CANVAS_W / 2, cy = CAR_CANVAS_H / 2  // car drawn centered
+
+  const oc  = new OffscreenCanvas(CAR_CANVAS_W * scale, CAR_CANVAS_H * scale)
+  const ctx = oc.getContext('2d')!
+  ctx.scale(scale, scale)
+
+  drawCar(ctx, cx, cy, hw, hh, dir, variant)
 
   return Texture.from(oc.transferToImageBitmap())
 }
@@ -110,6 +156,19 @@ export function bakeAllTextures(scale = 1): TextureCache {
   // pylon sprites in renderer.ts, so wires span continuously between pylons.
   for (let mask = 0; mask < 16; mask++) {
     cache.set(getOverlayKey(Overlay.Road, mask), bakeRoadOverlay(mask, scale))
+  }
+
+  // Diagonal-road overlays: diagonal-neighbor mask (0-15) = 16 textures.
+  for (let mask = 0; mask < 16; mask++) {
+    cache.set(getDiagOverlayKey(mask), bakeDiagRoadOverlay(mask, scale))
+  }
+
+  // Car sprites: 8 travel directions × CAR_VARIANTS colors (procedural fallback;
+  // a Blender-rendered car atlas can override these keys — see tools/blender).
+  for (const dir of CAR_DIRS) {
+    for (let v = 0; v < CAR_VARIANTS; v++) {
+      cache.set(getCarKey(dir, v), bakeCar(dir, v, scale))
+    }
   }
 
   return cache

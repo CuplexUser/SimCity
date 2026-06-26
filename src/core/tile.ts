@@ -18,7 +18,13 @@ export enum Overlay {
   PowerLine = 2,
   Rail      = 4,
   Pipe      = 8,  // water main — carries water any distance, crosses water terrain
+  RoadDiag  = 16, // diagonal road — runs corner-to-corner (45° to the grid roads),
+                  // connecting diagonal neighbors (NW/NE/SE/SW). A tile carries
+                  // either Road or RoadDiag, never both.
 }
+
+// Any drivable carriageway (orthogonal grid road OR 45° diagonal road).
+export const ROAD_ANY = Overlay.Road | Overlay.RoadDiag
 
 export enum Building {
   None          = 0,
@@ -94,6 +100,7 @@ export type ActiveTool =
   | { kind: 'zone';     zone: Zone }
   | { kind: 'building'; building: Building }
   | { kind: 'road' }
+  | { kind: 'roaddiag' }
   | { kind: 'power' }
   | { kind: 'pipe' }
   | { kind: 'bulldoze'; mode: BulldozeMode }

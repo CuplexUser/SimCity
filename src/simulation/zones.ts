@@ -1,5 +1,5 @@
 import { type World } from '../core/world'
-import { Zone, Overlay, Terrain } from '../core/tile'
+import { Zone, Terrain, ROAD_ANY } from '../core/tile'
 import { events, type LogEvent } from '../core/events'
 import { isRoadConnected } from '../utils/astar'
 import { placeFootprint } from '../core/footprint'
@@ -197,11 +197,11 @@ function hasRoadAccess(world: World, col: number, row: number): boolean {
   const candidates: Array<{ col: number; row: number }> = []
   const maxRoadAccessDistance = 2
 
-  if (world.get(col, row).overlay & Overlay.Road) candidates.push({ col, row })
+  if (world.get(col, row).overlay & ROAD_ANY) candidates.push({ col, row })
   for (const { dc, dr } of dirs) {
     for (let distance = 1; distance <= maxRoadAccessDistance; distance++) {
       const nc = col + dc * distance, nr = row + dr * distance
-      if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.Road)) {
+      if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & ROAD_ANY)) {
         candidates.push({ col: nc, row: nr })
         break
       }

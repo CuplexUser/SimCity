@@ -22,11 +22,13 @@ import { footprintTiles } from '../core/footprint'
 import { Minimap, MINI_W, MINI_H, MINI_MARGIN_R, MINI_MARGIN_B } from './minimap'
 import {
   bakeAllTextures, type TextureCache,
-  getBuildingKey, getOverlayKey,
+  getBuildingKey, getOverlayKey, getDiagOverlayKey, getCarKey,
   BLDG_CANVAS_H, BLDG_APEX_Y,
 } from './tileTextures'
 import { loadSpriteAtlas, type AtlasLevel, type LoadedAtlas, type SpriteMeta } from './spriteAtlas'
 import { drawTerrainTexture } from './sprites'
+import { CarSystem, type CarTexture } from './cars'
+import { type CarDir } from './tileRenderer'
 
 // ── Data-layer overlays ──────────────────────────────────────────────────────
 // A family of data-layer views (like SimCity's query overlays). Two kinds share
@@ -168,6 +170,9 @@ export class Renderer {
   // Water animation: references to Water terrain sprites
   private waterSpriteList: Sprite[] = []
 
+  // Animated traffic layer (cars driving the road network)
+  private cars!: CarSystem
+
   // Full-screen night overlay (on app.stage, not inside worldContainer)
   private nightOverlay!: Graphics
 
@@ -177,6 +182,8 @@ export class Renderer {
   private _overlayMode: OverlayMode = 'none'
   private _overlayGrid: Uint8Array | null = null  // gradient data (0..100 per tile)
   private _hoverIdx         = -1
+  private _hoverPath: Array<{ col: number; row: number }> | null = null  // diagonal-run preview
+  private _roadNetDirty     = true    // car road-network needs rebuild
   private _zoneLayerDirty   = true    // rebuild on first draw
   private _overlayDirty     = true    // data-layer view geometry
   private _waterListDirty   = true    // rebuild on first draw
@@ -309,6 +316,11 @@ export class Renderer {
     this.app.stage.addChild(this.minimapSprite)
     this._positionMinimap()
 
+    // Animated traffic — cars are direct children of worldContainer so their
+    // per-frame zIndex interleaves them with buildings by depth.
+    this.cars = new CarSystem(world, this.worldContainer, (dir, variant) =>
+      this._carTexture(dir, variant))
+
     // Clear startup dirty flags (world was just initialised, not user-changed)
     world.dirty.clear()
   }
@@ -356,7 +368,18 @@ export class Renderer {
             overlayIdxs.add(nr * world.cols + nc)
           }
         }
+        // Diagonal roads connect along the diagonal neighbors, so a diagonal-road
+        // change must rebuild its diagonal neighbors' masks too.
+        for (const [dc, dr] of [[-1,-1],[1,-1],[1,1],[-1,1]] as const) {
+          const nc = col + dc, nr = row + dr
+          if (world.inBounds(nc, nr) && (world.get(nc, nr).overlay & Overlay.RoadDiag)) {
+            overlayIdxs.add(nr * world.cols + nc)
+          }
+        }
       }
+
+      // Any tile change may add/remove drivable road — rebuild the car network.
+      this._roadNetDirty = true
 
       for (const idx of dirtyIdxs) {
         const col = idx % world.cols
@@ -391,6 +414,11 @@ export class Renderer {
     this._animateWater(performance.now())
     // Flicker active fires
     this._animateFire(performance.now())
+
+    // Animated traffic: rebuild the car network if roads changed, advance cars,
+    // and re-sort so their per-frame depth interleaves with buildings.
+    if (this._roadNetDirty) { this.cars.markNetworkDirty(); this._roadNetDirty = false }
+    if (this.cars.update(performance.now())) this.worldContainer.sortChildren()
 
     this._redrawMinimap()
 
@@ -431,7 +459,8 @@ export class Renderer {
 
   setHoverTile(col: number, row: number, w = 1, h = 1): void {
     const idx = this.world.inBounds(col, row) ? this._idx(col, row) : -1
-    if (idx !== this._hoverIdx || w !== this._hoverW || h !== this._hoverH) {
+    if (this._hoverPath || idx !== this._hoverIdx || w !== this._hoverW || h !== this._hoverH) {
+      this._hoverPath = null
       this._hoverIdx = idx
       this._hoverW   = Math.max(1, w)
       this._hoverH   = Math.max(1, h)
@@ -439,9 +468,18 @@ export class Renderer {
     }
   }
 
+  /** Highlight an explicit list of tiles (used for the 45° diagonal-road preview,
+   *  where a bounding-box rectangle would misrepresent the actual run). */
+  setHoverPath(tiles: Array<{ col: number; row: number }>): void {
+    this._hoverPath = tiles
+    this._hoverIdx  = -1
+    this._drawHoverHighlight()
+  }
+
   clearHoverTile(): void {
-    if (this._hoverIdx !== -1) {
-      this._hoverIdx = -1
+    if (this._hoverIdx !== -1 || this._hoverPath) {
+      this._hoverIdx  = -1
+      this._hoverPath = null
       this.hoverGfx.clear()
     }
   }
@@ -479,6 +517,14 @@ export class Renderer {
     // Tint developed lots by their zone color so zones read through the buildings.
     this._refreshBuildingTints()
   }
+
+  /** Toggle the animated traffic (cars) layer. */
+  setCarsEnabled(on: boolean): void { this.cars.setEnabled(on) }
+
+  carsEnabled(): boolean { return this.cars.isEnabled() }
+
+  /** Feed the latest traffic-load grid so cars spawn more on busy roads. */
+  setTrafficField(grid: Uint8Array | null): void { this.cars.setTrafficField(grid) }
 
   /** Select the data-layer overlay. Coverage modes (water/police/fire/health/
    *  education) tint served tiles and flag uncovered zones red; gradient modes
@@ -563,6 +609,23 @@ export class Renderer {
     return base ? { tex: base, bakeScale: 1 } : null
   }
 
+  /** Resolve a car sprite texture: prefer the Blender atlas, fall back to the
+   *  procedurally baked car. Atlas car frames anchor at their authored point;
+   *  baked cars are centered. */
+  private _carTexture(dir: CarDir, variant: number): CarTexture | null {
+    const key = getCarKey(dir, variant)
+    const meta = this._atlasMeta(key)
+    if (meta) return {
+      texture: meta.texture,
+      scale:   meta.scale,
+      anchorX: meta.frameW ? meta.anchorX / meta.frameW : 0.5,
+      anchorY: meta.frameH ? meta.anchorY / meta.frameH : 0.5,
+    }
+    const baked = this._bakedTex(key)
+    if (baked) return { texture: baked.tex, scale: 1 / baked.bakeScale, anchorX: 0.5, anchorY: 0.5 }
+    return null
+  }
+
   /** Switch to a zoom level's textures, preparing its assets on first use. */
   private _setTexLevel(level: AtlasLevel): void {
     if (!this.texCaches.has(level)) {
@@ -590,6 +653,7 @@ export class Renderer {
       if (this.overlaySprites[idx] || this.pylonSprites[idx] || this.wireGfx[idx] || this.pipeGfx[idx]) this._rebuildOverlay(col, row)
       if (this.buildingSprites[idx]) this._rebuildBuilding(col, row)
     })
+    this.cars.refreshTextures()
     this.worldContainer.sortChildren()
   }
 
@@ -650,13 +714,32 @@ export class Renderer {
     return this.overlayMask[this._idx(col, row)]
   }
 
+  // An orthogonal road connects to any adjacent carriageway — including a diagonal
+  // road sitting directly N/E/S/W — so the two road types fuse where they meet.
   private _roadMask(col: number, row: number): number {
     const { world } = this
+    const r = (c: number, rr: number): boolean =>
+      world.inBounds(c, rr) && !!(world.get(c, rr).overlay & (Overlay.Road | Overlay.RoadDiag))
     let mask = 0
-    if (row > 0            && (world.get(col, row - 1).overlay & Overlay.Road)) mask |= 1
-    if (col < world.cols-1 && (world.get(col + 1, row).overlay & Overlay.Road)) mask |= 2
-    if (row < world.rows-1 && (world.get(col, row + 1).overlay & Overlay.Road)) mask |= 4
-    if (col > 0            && (world.get(col - 1, row).overlay & Overlay.Road)) mask |= 8
+    if (r(col, row - 1)) mask |= 1
+    if (r(col + 1, row)) mask |= 2
+    if (r(col, row + 1)) mask |= 4
+    if (r(col - 1, row)) mask |= 8
+    return mask
+  }
+
+  /** 4-bit mask of diagonal-road connections: NW=1, NE=2, SE=4, SW=8. A diagonal
+   *  road also extends an arm toward an *orthogonal* road at a diagonal corner, so
+   *  a diagonal run visibly merges into a grid road it runs up to. */
+  private _diagRoadMask(col: number, row: number): number {
+    const w = this.world
+    const d = (c: number, r: number): boolean =>
+      w.inBounds(c, r) && !!(w.get(c, r).overlay & (Overlay.RoadDiag | Overlay.Road))
+    let mask = 0
+    if (d(col - 1, row - 1)) mask |= 1  // NW
+    if (d(col + 1, row - 1)) mask |= 2  // NE
+    if (d(col + 1, row + 1)) mask |= 4  // SE
+    if (d(col - 1, row + 1)) mask |= 8  // SW
     return mask
   }
 
@@ -694,10 +777,13 @@ export class Renderer {
     }
 
     // ── Roads: baked tile texture keyed by neighbor mask ─────────────────────
-    if (tile.overlay & Overlay.Road) {
-      const mask = this._roadMask(col, row)
+    // Orthogonal (grid-axis) and diagonal (45°) roads are mutually exclusive on a
+    // tile; each is a procedurally baked overlay sprite keyed by its neighbor mask.
+    if (tile.overlay & (Overlay.Road | Overlay.RoadDiag)) {
+      const diag = !!(tile.overlay & Overlay.RoadDiag)
+      const mask = diag ? this._diagRoadMask(col, row) : this._roadMask(col, row)
       this.overlayMask[idx] = mask
-      const baked = this._bakedTex(getOverlayKey(Overlay.Road, mask))
+      const baked = this._bakedTex(diag ? getDiagOverlayKey(mask) : getOverlayKey(Overlay.Road, mask))
       if (baked) {
         const sprite = new Sprite(baked.tex)
         sprite.anchor.set(0.5, 0)
@@ -1120,6 +1206,22 @@ export class Renderer {
   private _drawHoverHighlight(): void {
     const g = this.hoverGfx
     g.clear()
+
+    // Explicit-path preview (diagonal-road run): one diamond per tile.
+    if (this._hoverPath) {
+      const hw = BASE_HW, hh = BASE_HH
+      for (const { col, row } of this._hoverPath) {
+        if (!this.world.inBounds(col, row)) continue
+        const e  = this.world.get(col, row).elevation
+        const bx = (col - row) * hw
+        const by = (col + row) * hh - e * BASE_EH
+        const pts = [bx, by, bx + hw, by + hh, bx, by + 2 * hh, bx - hw, by + hh]
+        g.poly(pts).fill({ color: 0xffffff, alpha: 0.10 })
+        g.poly(pts).stroke({ color: 0xffffff, width: 1.8, alpha: 0.60 })
+      }
+      return
+    }
+
     if (this._hoverIdx < 0) return
 
     const col  = this._hoverIdx % this.world.cols

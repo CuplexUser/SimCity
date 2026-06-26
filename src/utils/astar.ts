@@ -1,5 +1,5 @@
 import { type World } from '../core/world'
-import { Overlay } from '../core/tile'
+import { Overlay, ROAD_ANY } from '../core/tile'
 
 const DIRS = [
   { dc:  0, dr:  1 },
@@ -7,6 +7,38 @@ const DIRS = [
   { dc:  1, dr:  0 },
   { dc: -1, dr:  0 },
 ]
+
+const DIAG = [
+  { dc:  1, dr:  1 },
+  { dc: -1, dr: -1 },
+  { dc:  1, dr: -1 },
+  { dc: -1, dr:  1 },
+]
+
+const isRoad     = (world: World, c: number, r: number) => !!(world.get(c, r).overlay & ROAD_ANY)
+const isDiagRoad = (world: World, c: number, r: number) => !!(world.get(c, r).overlay & Overlay.RoadDiag)
+
+/**
+ * Visit every road tile reachable in one step from (cc, cr). Mirrors the car
+ * lane graph: orthogonal links along any road; diagonal links only when this
+ * tile or the neighbor is a diagonal road (so paths never cut across the empty
+ * corner of two orthogonal roads).
+ */
+function forEachRoadNeighbor(
+  world: World, cc: number, cr: number,
+  visit: (nc: number, nr: number) => void,
+): void {
+  for (const { dc, dr } of DIRS) {
+    const nc = cc + dc, nr = cr + dr
+    if (world.inBounds(nc, nr) && isRoad(world, nc, nr)) visit(nc, nr)
+  }
+  const hereDiag = isDiagRoad(world, cc, cr)
+  for (const { dc, dr } of DIAG) {
+    const nc = cc + dc, nr = cr + dr
+    if (!world.inBounds(nc, nr) || !isRoad(world, nc, nr)) continue
+    if (hereDiag || isDiagRoad(world, nc, nr)) visit(nc, nr)
+  }
+}
 
 function heuristic(col: number, row: number, gc: number, gr: number): number {
   return Math.abs(col - gc) + Math.abs(row - gr)
@@ -23,8 +55,8 @@ export function findRoadPath(
   goalCol: number,  goalRow: number,
 ): Array<{ col: number; row: number }> | null {
   if (!world.inBounds(startCol, startRow) || !world.inBounds(goalCol, goalRow)) return null
-  if (!(world.get(startCol, startRow).overlay & Overlay.Road)) return null
-  if (!(world.get(goalCol, goalRow).overlay & Overlay.Road)) return null
+  if (!isRoad(world, startCol, startRow)) return null
+  if (!isRoad(world, goalCol, goalRow)) return null
   if (startCol === goalCol && startRow === goalRow) return [{ col: startCol, row: startRow }]
 
   const C  = world.cols
@@ -64,17 +96,14 @@ export function findRoadPath(
     const cc = ck % C, cr = (ck / C) | 0
     const cg = gScore[ck]
 
-    for (const { dc, dr } of DIRS) {
-      const nc = cc + dc, nr = cr + dr
-      if (!world.inBounds(nc, nr)) continue
-      if (!(world.get(nc, nr).overlay & Overlay.Road)) continue
+    forEachRoadNeighbor(world, cc, cr, (nc, nr) => {
       const nk = nr * C + nc
       const ng = cg + 1
-      if (ng >= gScore[nk]) continue
+      if (ng >= gScore[nk]) return
       gScore[nk] = ng
       prev[nk] = ck
       pushOpen(nk, ng + heuristic(nc, nr, goalCol, goalRow))
-    }
+    })
   }
   return null
 }
@@ -90,7 +119,7 @@ export function isRoadConnected(
   minTiles = 1,
 ): boolean {
   if (!world.inBounds(col, row)) return false
-  if (!(world.get(col, row).overlay & Overlay.Road)) return false
+  if (!isRoad(world, col, row)) return false
 
   const C       = world.cols
   const visited = new Uint8Array(world.cols * world.rows)
@@ -106,15 +135,12 @@ export function isRoadConnected(
     count++
     if (count > minTiles) return true
 
-    for (const { dc, dr } of DIRS) {
-      const nc = c + dc, nr = r + dr
-      if (!world.inBounds(nc, nr)) continue
+    forEachRoadNeighbor(world, c, r, (nc, nr) => {
       const nk = nr * C + nc
-      if (visited[nk]) continue
-      if (!(world.get(nc, nr).overlay & Overlay.Road)) continue
+      if (visited[nk]) return
       visited[nk] = 1
       colQ[tail] = nc; rowQ[tail] = nr; tail++
-    }
+    })
   }
   return count > minTiles
 }

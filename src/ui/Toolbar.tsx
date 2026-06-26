@@ -22,7 +22,7 @@ export type ToolKey =
   | 'PP' | 'GT' | 'NP' | 'SF' | 'WN'
   | 'WT' | 'WP' | 'PM' | 'PS' | 'FS' | 'HP' | 'SC' | 'LB'
   | 'PK' | 'PZ'
-  | 'road' | 'power' | 'pipe'
+  | 'road' | 'roaddiag' | 'power' | 'pipe'
   | 'dozeNormal' | 'dozeTerrain' | 'dozeZoning'
 
 export function keyToTool(key: ToolKey): ActiveTool {
@@ -45,6 +45,7 @@ export function keyToTool(key: ToolKey): ActiveTool {
   if (key === 'PK')   return { kind: 'building', building: Building.Park }
   if (key === 'PZ')   return { kind: 'building', building: Building.Plaza }
   if (key === 'road') return { kind: 'road' }
+  if (key === 'roaddiag') return { kind: 'roaddiag' }
   if (key === 'power')return { kind: 'power' }
   if (key === 'pipe') return { kind: 'pipe' }
   return { kind: 'bulldoze', mode: bulldozeModeForKey(key) }
@@ -108,7 +109,7 @@ const PARK_BTNS: ToolBtn[] = [
 ]
 
 const ROAD_BTNS: ToolBtn[] = [
-  { key: 'road',  label: 'Road ($10/tile)',       bg: '#1a1a1a', title: 'Road [R]' },
+  { key: 'road',  label: 'Road ($10/tile)',      bg: '#1a1a1a', title: 'Road — drag straight for grid roads or diagonally for 45° roads [R]' },
   { key: 'power', label: 'Power line ($5/tile)',  bg: '#1a1a00', title: 'Power line [L]' },
   { key: 'pipe',  label: 'Water pipe ($4/tile)',  bg: '#0a1822', fg: '#7dc4dd', title: 'Water pipe — carries water across the map and under lots' },
 ]
@@ -124,7 +125,7 @@ const TOOL_ICONS: Partial<Record<ToolKey, string>> = {
   PP: '🏭', GT: '💨', NP: '⚛', SF: '☀', WN: '🌬',
   WT: '💧', WP: '🚰', PM: '🏗', PS: '🚔', FS: '🚒', HP: '🏥', SC: '🏫', LB: '📚',
   PK: '🌳', PZ: '⛲',
-  road: '━', power: '⚡', pipe: '〰',
+  road: '━', roaddiag: '╱', power: '⚡', pipe: '〰',
   dozeNormal: '🔨', dozeTerrain: '⛏', dozeZoning: '✂',
 }
 
@@ -133,7 +134,7 @@ function categoryForKey(key: ToolKey): CategoryId {
   if (['PP', 'GT', 'NP', 'SF', 'WN'].includes(key)) return 'power'
   if (['WT', 'WP', 'PM', 'PS', 'FS', 'HP', 'SC', 'LB'].includes(key)) return 'services'
   if (['PK', 'PZ'].includes(key)) return 'parks'
-  if (['road', 'power', 'pipe'].includes(key)) return 'roads'
+  if (['road', 'roaddiag', 'power', 'pipe'].includes(key)) return 'roads'
   return 'doze'
 }
 
@@ -154,6 +155,8 @@ interface Props {
   onNightMode:     (on: boolean) => void
   showZoneOverlay: boolean
   onZoneOverlay:   (on: boolean) => void
+  showCars:        boolean
+  onCars:          (on: boolean) => void
   overlay:         OverlayMode
   onOverlay:       (mode: OverlayMode) => void
 }
@@ -163,6 +166,7 @@ export function Toolbar({
   onNewGame, onSaveState, onLoadState, onExportFile, onImportFile, onOptionsOpen,
   cityName, onCityNameChange, savedCities, status,
   nightMode, onNightMode, showZoneOverlay, onZoneOverlay,
+  showCars, onCars,
   overlay, onOverlay,
 }: Props) {
   const [openCat, setOpenCat] = useState<CategoryId | null>(null)
@@ -280,6 +284,7 @@ export function Toolbar({
     if (openCat === 'view') return [
       toggleBtn('Night Mode',     nightMode,        onNightMode,     'Toggle night mode [N]'),
       toggleBtn('Zone Overlay',   showZoneOverlay,  onZoneOverlay,   'Show zone color overlay [V]'),
+      toggleBtn('Animated Traffic', showCars,       onCars,          'Show cars driving the roads'),
       // Data-layer overlays are mutually exclusive — selecting one clears the
       // rest; clicking the active one turns it off. [C] cycles through them.
       ...OVERLAY_OPTS.map(({ mode, label, hint }) =>
