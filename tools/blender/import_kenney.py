@@ -43,50 +43,16 @@ PPU = 96            # render pixels per blender-unit (sets resolution; tilePx is
 ELEV = math.atan(0.5)
 TILE_UNIT = 1.0     # Kenney City Kit: 1 grid cell ~= 1 blender unit (verified by probe)
 
-scene = bpy.context.scene
-scene.render.film_transparent = True
-scene.render.image_settings.file_format = 'PNG'
-scene.render.image_settings.color_mode = 'RGBA'
-# EEVEE silently writes nothing in headless `-b` mode (no GL context); Workbench
-# renders reliably headless. Configure it to show glTF textures with directional
-# studio shading + cavity so low-poly faces read like the procedural fallback.
-scene.render.engine = 'BLENDER_WORKBENCH'
-shading = scene.display.shading
-shading.light = 'STUDIO'
-shading.color_type = 'TEXTURE'
-shading.show_shadows = False
-shading.show_cavity = True
-shading.cavity_type = 'WORLD'
+# Shared Cycles render core (camera / dramatic light rig / PBR materials). This
+# replaces the old BLENDER_WORKBENCH fallback — the City Kit GLBs already carry
+# Principled-BSDF materials, so rendering them through Cycles gives real
+# directional light, self-shadowing, AO and glass reflections for free.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import iso_render as ir
 
-# ── Camera (orthographic 2:1 dimetric) ────────────────────────────────────────
-cam_data = bpy.data.cameras.new("iso")
-cam_data.type = 'ORTHO'
-cam = bpy.data.objects.new("iso", cam_data)
-scene.collection.objects.link(cam)
-scene.camera = cam
-cam.rotation_euler = (math.pi / 2 - ELEV, 0.0, math.pi / 4)
-cam_data.clip_start = 0.01
-cam_data.clip_end = 1000.0
-# Camera basis vectors in world space.
-R = cam.rotation_euler.to_matrix()
-CAM_RIGHT = (R @ Vector((1, 0, 0))).normalized()
-CAM_UP = (R @ Vector((0, 1, 0))).normalized()
-CAM_FWD = (R @ Vector((0, 0, -1))).normalized()  # camera looks down -Z local
-
-# ── Sun (screen south-west) ───────────────────────────────────────────────────
-sun_data = bpy.data.lights.new("sun", 'SUN')
-sun_data.energy = 3.0
-sun = bpy.data.objects.new("sun", sun_data)
-sun.rotation_euler = (math.radians(55), 0.0, math.radians(215))
-scene.collection.objects.link(sun)
-# A little ambient so shadowed faces aren't pure black.
-world = bpy.data.worlds.new("w") if not scene.world else scene.world
-scene.world = world
-world.use_nodes = True
-try:
-    world.node_tree.nodes["Background"].inputs[1].default_value = 0.35
-except Exception:
-    pass
+scene = ir.setup_scene(samples=128)
+cam, CAM_RIGHT, CAM_UP, CAM_FWD = ir.setup_camera(scene)
+ir.setup_lights(scene)
 
 
 def import_glb(path):
