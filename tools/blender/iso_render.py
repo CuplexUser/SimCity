@@ -66,8 +66,24 @@ def setup_scene(samples=128, transparent=True, tonemap='AgX'):
 
     scene.cycles.samples = samples
     scene.cycles.use_denoising = True
+    # TDR fix: denoise on the CPU with OpenImageDenoise rather than the GPU OptiX
+    # denoiser. The OptiX denoiser's filter_color_* kernels run as one long CUDA
+    # launch and routinely exceed the Windows display-driver watchdog (TDR), which
+    # kills the render with "Launch exceeded timeout" (CUDA error 702). OIDN runs
+    # on the CPU and never touches the GPU watchdog.
     try:
-        scene.cycles.denoiser = 'OPTIX'
+        scene.cycles.denoiser = 'OPENIMAGEDENOISE'
+    except Exception:
+        pass
+    try:
+        scene.cycles.denoising_use_gpu = False
+    except Exception:
+        pass
+    # Auto-tile so the path-tracing kernel is dispatched in bounded chunks instead
+    # of one big launch — keeps each GPU launch well under the TDR watchdog too.
+    try:
+        scene.cycles.use_auto_tile = True
+        scene.cycles.tile_size = 512
     except Exception:
         pass
     # Small caustic/bounce budget — these are tiny architectural scenes.

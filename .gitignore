@@ -34,3 +34,6 @@ settings.local.json
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Python
+tools/blender/__pycache__/

@@ -8,6 +8,10 @@ You never open Blender's UI. Run:
     blender -b -P tools/blender/import_kenney.py -- \
         --config tools/blender/kenney_packs.json --out tools/assets-src
 
+Add --missing-only to skip the (slow) Cycles render for any rotation whose PNG
+already exists in --out; the cheap framing/anchor math still runs so spriteMap
+entries stay correct. Delete a PNG to force it to re-render.
+
 Then:  pnpm build:atlas   (packs tools/assets-src/*.png -> public/sprites/)
 
 Geometry contract (must match src/rendering/isoCamera.ts):
@@ -37,7 +41,13 @@ def arg(flag, default):
 
 config_path = arg("--config", "tools/blender/kenney_packs.json")
 out_dir = os.path.abspath(arg("--out", "tools/assets-src"))
+# --missing-only: skip the (slow) Cycles render for any rotation whose PNG
+# already exists on disk. The cheap framing/anchor math still runs so the
+# spriteMap entry stays correct.
+MISSING_ONLY = "--missing-only" in argv
 os.makedirs(out_dir, exist_ok=True)
+
+STATS = {"rendered": 0, "skipped": 0}
 
 PPU = 96            # render pixels per blender-unit (sets resolution; tilePx is measured, not assumed)
 ELEV = math.atan(0.5)
@@ -72,8 +82,9 @@ def world_bbox(objs):
     return mn, mx
 
 
-def _render_current(objs, fname):
-    """Frame the current pose, render to fname.png, return (anchorX, anchorY, tilePx)."""
+def _render_current(objs, fname, do_render=True):
+    """Frame the current pose, render to fname.png (unless do_render is False),
+    return (anchorX, anchorY, tilePx)."""
     mn, mx = world_bbox(objs)
     corners = [Vector((x, y, z)) for x in (mn.x, mx.x) for y in (mn.y, mx.y) for z in (mn.z, mx.z)]
     corners += [Vector((0, 0, 0)), Vector((1, 0, 0)), Vector((1, 1, 0)), Vector((0, 1, 0))]
@@ -94,7 +105,8 @@ def _render_current(objs, fname):
             o.hide_render = (o not in objs)
 
     scene.render.filepath = os.path.join(out_dir, fname + ".png")
-    bpy.ops.render.render(write_still=True)
+    if do_render:
+        bpy.ops.render.render(write_still=True)
 
     def px(p):
         co = world_to_camera_view(scene, cam, Vector(p))
@@ -142,7 +154,13 @@ def render_building(objs, zone, bucket, variant, name):
         pivot.rotation_euler = (0.0, 0.0, math.radians(90 * rot))
         bpy.context.view_layer.update()
         fname = f"z_{zone}_{bucket}_{variant}_r{rot}__{name}"
-        ax, ay, tile_px = _render_current(objs, fname)
+        exists = os.path.exists(os.path.join(out_dir, fname + ".png"))
+        do_render = not (MISSING_ONLY and exists)
+        if not do_render:
+            STATS["skipped"] += 1
+        else:
+            STATS["rendered"] += 1
+        ax, ay, tile_px = _render_current(objs, fname, do_render=do_render)
         out.append((fname + ".png", {
             "key": f"z:{zone}:{bucket}:{variant}:r{rot}",
             "footW": 1, "footH": 1,
@@ -181,7 +199,15 @@ def main():
     with open(config_path) as f:
         cfg = json.load(f)
 
+    # MERGE into any existing spriteMap.json (mirrors assemble_modular.py) so the
+    # civic b: keys and big multi-tile zone lots that assemble_modular.py adds are
+    # preserved. Writing wholesale here previously wiped them on every run.
+    map_path = os.path.normpath(os.path.join(os.path.dirname(config_path), "..", "spriteMap.json"))
     sprite_map = {}
+    if os.path.exists(map_path):
+        with open(map_path) as f:
+            sprite_map = json.load(f)
+
     summary = []
     for pack in cfg["packs"]:
         folder = pack["glb"]
@@ -215,10 +241,7 @@ def main():
             for o in list(objs):
                 bpy.data.objects.remove(o, do_unlink=True)
 
-    # Write spriteMap.json next to assets so buildAtlas.mjs consumes it.
-    map_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(config_path)))), "spriteMap.json")
-    # config is tools/blender/kenney_packs.json -> spriteMap at tools/spriteMap.json
-    map_path = os.path.normpath(os.path.join(os.path.dirname(config_path), "..", "spriteMap.json"))
+    # Write the merged spriteMap.json next to assets so buildAtlas.mjs consumes it.
     with open(map_path, "w") as f:
         json.dump(sprite_map, f, indent=2)
 
@@ -226,6 +249,8 @@ def main():
     for key, name in summary:
         print(f"  {key:12s} <- {name}")
     print(f"Rendered {len(summary)} buildings x4 rotations = {len(sprite_map)} sprites to {out_dir}")
+    if MISSING_ONLY:
+        print(f"--missing-only: {STATS['rendered']} rendered, {STATS['skipped']} skipped (PNG already on disk)")
     print(f"Wrote sprite map: {map_path}")
     print("Next: pnpm build:atlas")
 
