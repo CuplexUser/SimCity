@@ -95,7 +95,10 @@ def setup_scene(samples=128, transparent=True, tonemap='AgX'):
     scene.render.image_settings.color_mode = 'RGBA'
     try:
         scene.view_settings.view_transform = tonemap
-        scene.view_settings.look = 'AgX - Medium High Contrast'
+        # Base (low) contrast, not Medium-High: the high-contrast look crushed the
+        # shaded side and pushed the sun-facing face toward white, which read as the
+        # "washed out / too light on one side" glass towers. Base keeps faces even.
+        scene.view_settings.look = 'AgX - Base Contrast'
     except Exception:
         pass
     return scene
@@ -120,28 +123,37 @@ def setup_camera(scene):
 
 
 # ── Lighting rig ───────────────────────────────────────────────────────────────
-def setup_lights(scene, key_energy=4.5, sky_strength=0.55):
-    """Bright dramatic-day rig: warm SW key sun + Nishita sky (lights & reflects)
-    + a cool fill so shaded faces read blue. The sky is invisible in the alpha
-    because the scene is film_transparent."""
-    # Key sun.
+def setup_lights(scene, key_energy=3.2, sky_strength=0.5):
+    """Soft, neutral daylight rig: a near-white SW key sun balanced by a strong
+    near-white fill and a flat neutral sky, so both camera-facing faces read at a
+    similar, even brightness with gentle directional form — no blown-out gradient.
+
+    This replaces the old "bright dramatic day" rig (a hot warm key + a Nishita sky
+    the glass reflected as bright highlights + AgX high contrast), which lit the
+    sun-facing face far brighter than the shaded one and washed the glass towers
+    out on one side. The sky is invisible in the alpha (scene is film_transparent);
+    it only provides soft, even ambient — a flat color, not Nishita, for control."""
+    # Key sun — near-white (a touch warm) so it tints faces only slightly.
     sun_d = bpy.data.lights.new("key", 'SUN')
     sun_d.energy = key_energy
-    sun_d.color = (1.0, 0.92, 0.80)        # warm late-morning
-    sun_d.angle = math.radians(1.5)        # crisp but not razor shadows
+    sun_d.color = (1.0, 0.98, 0.95)        # near-neutral, faintly warm daylight
+    sun_d.angle = math.radians(3.0)        # soft shadow edges (diffuse look)
     sun = bpy.data.objects.new("key", sun_d)
     sun.rotation_euler = SUN_ROT
     scene.collection.objects.link(sun)
 
-    # Cool fill from the opposite (screen NE) side so shadowed faces aren't dead.
+    # Strong near-white fill from the opposite (screen NE) side. At 0.5x the key
+    # (was 0.22x) the shaded face stays close to the lit one — the flat, diffuse
+    # look — with only a faint cool cast so the two faces still separate.
     fill_d = bpy.data.lights.new("fill", 'SUN')
-    fill_d.energy = key_energy * 0.22
-    fill_d.color = (0.62, 0.74, 1.0)       # sky blue bounce
+    fill_d.energy = key_energy * 0.5
+    fill_d.color = (0.85, 0.88, 0.95)      # near-neutral, faintly cool
     fill = bpy.data.objects.new("fill", fill_d)
     fill.rotation_euler = (math.radians(60), 0.0, math.radians(35))
     scene.collection.objects.link(fill)
 
-    # World = Nishita sky for realistic reflections in glass + cool ambient.
+    # World = a flat neutral sky color for soft, even ambient (no Nishita gradient
+    # or directional sun that the glass could catch as a hot highlight).
     world = scene.world or bpy.data.worlds.new("w")
     scene.world = world
     world.use_nodes = True
@@ -150,15 +162,7 @@ def setup_lights(scene, key_energy=4.5, sky_strength=0.55):
     out = nt.nodes.new("ShaderNodeOutputWorld")
     bg = nt.nodes.new("ShaderNodeBackground")
     bg.inputs[1].default_value = sky_strength
-    try:
-        sky = nt.nodes.new("ShaderNodeTexSky")
-        sky.sky_type = 'NISHITA'
-        sky.sun_elevation = math.radians(38)
-        sky.sun_rotation = math.radians(215)
-        sky.altitude = 200.0
-        nt.links.new(sky.outputs[0], bg.inputs[0])
-    except Exception:
-        bg.inputs[0].default_value = (0.34, 0.46, 0.62, 1.0)
+    bg.inputs[0].default_value = (0.55, 0.60, 0.66, 1.0)   # flat neutral daylight sky
     nt.links.new(bg.outputs[0], out.inputs[0])
     return sun, fill
 
@@ -212,10 +216,21 @@ def frame_and_render(scene, cam, right, up, fwd, objs, out_path, *,
 
 
 # ── Material library ───────────────────────────────────────────────────────────
-def _principled(name):
+def _principled(name, bevel=0.015):
+    """New Principled material. `bevel` adds a Cycles Bevel node into the Normal
+    input so every hard edge gets a small rounded-shading fillet (radius in world
+    units, so it's uniform regardless of object scale). This softens the flat
+    box-CGI look and lets edges/corners catch a highlight + contact shading."""
     m = bpy.data.materials.new(name)
     m.use_nodes = True
-    return m, m.node_tree.nodes.get("Principled BSDF")
+    nt = m.node_tree
+    b = nt.nodes.get("Principled BSDF")
+    if bevel:
+        bev = nt.nodes.new("ShaderNodeBevel")
+        bev.samples = 4
+        bev.inputs["Radius"].default_value = bevel
+        nt.links.new(bev.outputs["Normal"], b.inputs["Normal"])
+    return m, b
 
 
 def mat_pbr(name, color, metallic=0.0, roughness=0.6):

@@ -14,7 +14,9 @@
     "gen:atlas": "node tools/genStarterAtlas.mjs",
     "build:atlas": "node tools/genCars.mjs && node tools/buildAtlas.mjs",
     "gen:cars": "node tools/genCars.mjs",
-    "gen:cars:blender": "blender -b -P tools/blender/render_cars.py -- --out tools/assets-src"
+    "gen:cars:blender": "blender -b -P tools/blender/render_cars.py -- --out tools/assets-src",
+    "gen:city:blend": "blender -b -P tools/blender/build_city_assets.py",
+    "render:city": "blender -b tools/blender/city_assets.blend -P tools/blender/render_isos.py -- --out tools/assets-src"
   },
   "dependencies": {
     "idb-keyval": "^6.2.1",

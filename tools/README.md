@@ -41,18 +41,24 @@ The in-game iso (`src/rendering/isoCamera.ts`) is **2:1 dimetric**: one tile is
 
 ## Two ways to make resources
 
-### 1. Blender (custom SC4-style art — the long-term path)
+### 1. Blender (custom SC4-style art — editable master `.blend`)
 
-See `blender/README.md`. Model each building 1 unit = 1 tile with its NW corner at
-the world origin, name objects to match keys (`z_1_0_0`, `b_3` — `_`→`:`), then:
+See `blender/README.md`. `tools/blender/city_assets.blend` is a **hand-editable**
+scene of real mesh models — the infrastructure (power plants, water utilities,
+pylon) and glass curtain-wall towers. Each asset is a collection named after its
+key (`b_1`, `z_2_2_6`, `infra_pylon` — `_`→`:`) with a `["foot"]` custom property
+for its tile footprint. Edit it in Blender, then:
 
 ```bash
-blender -b tools/blender/city_assets.blend -P tools/blender/render_isos.py -- --out tools/assets-src
+pnpm render:city   # blender -b city_assets.blend -P render_isos.py -- --out tools/assets-src
 pnpm build:atlas
 ```
 
-The render script uses an orthographic 2:1 dimetric camera + SW sun and writes a
-`_blender_meta.json` with footprints/anchors so packing is automatic.
+`render_isos.py` re-centers each collection on its plot, renders through the shared
+neutral daylight rig + 2:1 dimetric ortho camera (`iso_render.py`), and measures
+the anchor + per-sprite `tilePx` empirically into `spriteMap.json` — packing is
+automatic. `pnpm gen:city:blend` rebuilds the `.blend` from the seed script
+(`build_city_assets.py`) but overwrites your edits.
 
 ### 1b. Kenney City Kits (the current atlas — automated)
 
@@ -76,7 +82,7 @@ It writes the PNGs *and* `tools/spriteMap.json`, so `pnpm build:atlas` just pack
 rule. Only files whose name starts with `building` are imported (props/details
 are skipped). Edit it to point at your own unzipped pack folders.
 
-### 1c. Kenney Modular Buildings → civic + big buildings (automated)
+### 1c. Kenney Modular Buildings → big zone lots (automated)
 
 The City Kits are single-cell only. `blender/assemble_modular.py` builds the art
 they can't, from the **Kenney Modular Buildings** kit (a clean 1×1×0.625-unit grid
@@ -95,40 +101,31 @@ Each spec mixes the kit's modules so buildings read as distinct: window styles
 **parapet roof** (`roof-flat-border-side`/`-corner` lip + `roof-flat-detail-*`
 rooftop units) instead of a flat slab, optional rooftop AC, and a `roof-flat-top`-
 capped watch tower. It renders:
-- **Civic buildings** keyed `b:{enum}` at a 2×2 footprint — Police (large windows),
-  Fire (engine bays + watch tower), Hospital (tall, awnings, rooftop plant), School
-  (wide, arched windows, awnings), Library (arched/classical) — replacing the
-  procedural fallback for those.
 - **3×3 big zone buildings** keyed `z:{zone}:{bucket}:{variant}:r{rot}` (4 rotations)
   so the sim grows real large lots (`zoneLotSizes()` then reports size 3):
   residential w/ balconies (gray walls + green roof to match the Suburban City
-  Kit houses), a blue-glass commercial tower, a drab industrial plant.
+  Kit houses), a limestone-and-glass commercial tower (`big_com`), a drab
+  industrial plant.
 
 Most buildings are the kit's beige texture multiplied by a per-building `tint`,
 but a building can instead set a `palette` (gray `wall` / green `roof` / `trim`)
-that renders flat per-group colors in Workbench OBJECT mode — used by `big_res`
-so a dense residential lot blends with the green-roofed suburban houses around it
-instead of reading as a sand-colored box. Pieces are tagged `wall`/`roof`/`trim`
-via `instance(..., grp=)`.
+that renders flat per-group colors — used by `big_res` so a dense residential lot
+blends with the green-roofed suburban houses around it instead of reading as a
+sand-colored box. Pieces are tagged `wall`/`roof`/`trim` via `instance(..., grp=)`.
 
-The same script also renders **infrastructure** that no Kenney kit models, built
-from Blender mesh **primitives** (`box`/`cyl`/`cone`/`dome`, coordinates in tile
-units; `fit_footprint` normalizes each to its plot). Primitives set their own
-`o.color`, rendered flat via `palette='keep'` (Workbench OBJECT mode, no recolor):
-- Power plants + water tower keyed `b:{enum}` — coal (powerhouse + banded stacks +
-  fuel tanks), gas turbine, nuclear (cooling tower + domed containment), solar
-  farm (tilted panel rows), wind turbine, water tower (braced tank) — replacing
-  the procedural fallback for those.
-- A transmission **pylon** keyed `infra:pylon` (1×1 steel lattice + cross-arms +
-  insulators). The renderer draws it on every power-line tile, on the building
-  layer above the procedural connecting wire (`renderer.ts` `_rebuildOverlay`).
+> **Infrastructure, civic + glass towers moved out.** The power plants, water
+> utilities, transmission pylon, the civic services (`b:3` police, `b:4` fire,
+> `b:5` hospital, `b:6` school, `b:7` library) and the glass curtain-wall towers
+> used to be generated here; they are now **real, editable meshes** in
+> `blender/city_assets.blend`, rendered by `render_isos.py` (see §1). Edit them in
+> Blender, not in this script.
 
 Piece facings are measured from the GLBs: window/door/awning detail and the
 border-side parapet lip face `-Y` at rotation 0 (map `{-Y:0,+X:90,+Y:180,-X:270}`);
 corner pieces' feature faces the `+X,-Y` diagonal at rotation 0 (see `CORNER_RZ`).
 It **merges** into `tools/spriteMap.json` so the City Kit zone art is preserved.
-Edit the `CIVIC` / `BIG` spec lists at the bottom of the script to add buildings
-or change which modules each uses.
+Edit the `BIG` spec list at the bottom of the script to add buildings or change
+which modules each uses.
 
 ### 2. CC0 isometric pack (fast drop-in)
 
@@ -146,9 +143,12 @@ angle is ~2:1 dimetric so they sit flat on the grid.
 | `genStarterAtlas.mjs` | Generates the built-in starter atlas with `@napi-rs/canvas` (no external assets). Swappable per-key by the two methods above. |
 | `buildAtlas.mjs` | Packs `assets-src/*.png` + `spriteMap.json` → atlas + manifest. |
 | `spriteMap.json` | Source-PNG → atlas-key mapping (illustrative entries included). |
-| `blender/render_isos.py` | Headless Blender batch renderer at the in-game iso angle (for custom `.blend` art). |
+| `blender/iso_render.py` | Shared render core: 2:1 dimetric ortho camera, neutral daylight rig, PBR/glass materials. Imported by the render scripts. |
+| `blender/city_assets.blend` | Editable master scene: real meshes for infrastructure + glass towers (one collection per key, `["foot"]` = footprint). |
+| `blender/build_city_assets.py` | One-time bootstrap that (re)seeds `city_assets.blend` from the primitive builders. |
+| `blender/render_isos.py` | Headless Blender: render each tagged collection in `city_assets.blend` → PNGs + spriteMap.json at the in-game iso angle. |
 | `blender/import_kenney.py` | Headless Blender: import Kenney `.glb` kits → re-origin → render → write PNGs + spriteMap.json. |
-| `blender/assemble_modular.py` | Headless Blender: assemble Kenney Modular Buildings pieces → civic (`b:`) + 3×3 zone buildings, plus primitive-built infrastructure (power plants/water tower `b:`, `infra:pylon`) → merge spriteMap.json. |
+| `blender/assemble_modular.py` | Headless Blender: assemble Kenney Modular Buildings pieces → 3×3 big zone lots (`z:`) → merge spriteMap.json. |
 | `blender/kenney_packs.json` | Maps each Kenney pack folder → zone + density-bucketing rule. |
 | `blender/README.md` | Blender camera/anchor math + modeling conventions. |
 
