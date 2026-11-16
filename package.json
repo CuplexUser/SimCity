@@ -19,20 +19,20 @@
     "render:city": "blender -b tools/blender/city_assets.blend -P tools/blender/render_isos.py -- --out tools/assets-src"
   },
   "dependencies": {
-    "idb-keyval": "^6.2.1",
-    "pixi.js": "^8.18.1",
-    "preact": "^10.19.6",
-    "simplex-noise": "^4.0.1",
-    "zustand": "^4.5.2"
+    "idb-keyval": "^6.3.0",
+    "pixi.js": "^8.23.0",
+    "preact": "^10.29.8",
+    "simplex-noise": "^4.0.3",
+    "zustand": "^4.5.7"
   },
   "devDependencies": {
-    "@napi-rs/canvas": "^1.0.0",
-    "@playwright/test": "^1.60.0",
-    "@preact/preset-vite": "^2.8.1",
-    "@types/node": "^25.9.0",
-    "typescript": "^5.3.3",
-    "vite": "^5.2.0",
-    "vitest": "^2.1.9"
+    "@napi-rs/canvas": "^1.1.1",
+    "@playwright/test": "^1.65.1",
+    "@preact/preset-vite": "^2.10.6",
+    "@types/node": "^25.9.9",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.6",
+    "vitest": "^4.1.12"
   },
   "packageManager": "pnpm@11.5.2"
 }
